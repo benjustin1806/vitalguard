@@ -1,0 +1,42 @@
+[
+  {
+    "id": "h1",
+    "name": "St. Mary Medical Center",
+    "beds_total": 120,
+    "beds_available": 0,
+    "icu_total": 24,
+    "icu_available": 4,
+    "ventilators_total": 15,
+    "ventilators_available": 2
+  },
+  {
+    "id": "h2",
+    "name": "City General Hospital",
+    "beds_total": 200,
+    "beds_available": 2,
+    "icu_total": 45,
+    "icu_available": 0,
+    "ventilators_total": 30,
+    "ventilators_available": 0
+  },
+  {
+    "id": "h3",
+    "name": "Valley Care Clinic",
+    "beds_total": 45,
+    "beds_available": 0,
+    "icu_total": 8,
+    "icu_available": 3,
+    "ventilators_total": 4,
+    "ventilators_available": 1
+  },
+  {
+    "id": "h4",
+    "name": "Hope Children's Hospital",
+    "beds_total": 90,
+    "beds_available": 0,
+    "icu_total": 15,
+    "icu_available": 0,
+    "ventilators_total": 10,
+    "ventilators_available": 0
+  }
+]

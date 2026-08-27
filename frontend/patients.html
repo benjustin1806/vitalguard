@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VitalGuard — Patient List</title>
+  <meta name="description" content="VitalGuard patient monitoring list — view all admitted patients, their IV status, and medication alerts in real time.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff', 100: '#e0e7ff',
+              500: '#6366f1', 600: '#4f46e5',
+              700: '#4338ca', 900: '#312e81',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at 10% 20%, #171932 0%, #0b0c16 90%);
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    .font-display { font-family: 'Outfit', sans-serif; }
+    .glass-panel {
+      background: rgba(17, 24, 39, 0.55);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: 0 8px 32px 0 rgba(0,0,0,0.37);
+    }
+    .patient-card {
+      background: rgba(30, 41, 59, 0.4);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+    }
+    .patient-card:hover {
+      border-color: rgba(99, 102, 241, 0.35);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 30px -5px rgba(99, 102, 241, 0.15);
+    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15,23,42,0.3); }
+    ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.3); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.5); }
+
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .card-enter { animation: slide-in 0.35s ease-out forwards; }
+
+    @keyframes pulse-ring {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+      50%       { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+    }
+    .badge-alert { animation: pulse-ring 2s infinite; }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+  <!-- Header -->
+  <header class="glass-panel border-b border-white/5 py-4 px-6 flex items-center justify-between sticky top-0 z-30">
+    <div class="flex items-center gap-3">
+      <a href="/app/index.html" class="h-10 w-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center shadow-lg shadow-brand-500/20 hover:opacity-80 transition">
+        <i class="fa-solid fa-shield-halved text-white text-lg"></i>
+      </a>
+      <div>
+        <h1 class="text-xl font-bold font-display tracking-tight text-white flex items-center gap-2">
+          VitalGuard
+          <span class="text-xs bg-brand-500/10 text-brand-100 border border-brand-500/20 px-2 py-0.5 rounded-full font-mono font-normal">Patient Monitor</span>
+        </h1>
+        <p class="text-xs text-slate-400">Per-patient vitals, IV status, and medication schedule</p>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-white/10 ml-4">
+        <a href="/app/index.html" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-gauge-high text-[11px]"></i> Resource Grid
+        </a>
+        <a href="/app/patients.html" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 text-white shadow transition flex items-center gap-1.5">
+          <i class="fa-solid fa-hospital-user text-[11px]"></i> Patients & Vitals
+        </a>
+      </nav>
+    </div>
+
+    <div class="flex items-center gap-4">
+      <!-- Connection status -->
+      <div class="flex items-center gap-2 bg-slate-900/60 border border-white/5 px-3 py-1.5 rounded-lg text-xs">
+        <span class="relative flex h-2 w-2">
+          <span id="conn-dot-pulse" class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-emerald-400"></span>
+          <span id="conn-dot" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
+        <span id="conn-text" class="text-emerald-400 font-medium">Live</span>
+      </div>
+
+      <!-- Refresh -->
+      <button id="refresh-btn" onclick="fetchPatients()" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-300 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-rotate text-[10px]"></i> Refresh
+      </button>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="flex-1 p-6 max-w-5xl mx-auto w-full">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-lg font-bold font-display text-white">Admitted Patients</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Click a patient to view full vitals, IV status, and medication schedule</p>
+      </div>
+      <span id="patient-count" class="text-xs text-slate-500 font-mono"></span>
+    </div>
+
+    <!-- Patient grid -->
+    <div id="patients-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <!-- Loading state -->
+      <div id="loading-placeholder" class="col-span-full py-20 flex flex-col items-center justify-center text-slate-400">
+        <i class="fa-solid fa-spinner animate-spin text-2xl text-brand-500 mb-3"></i>
+        <span class="text-xs">Loading patient registry...</span>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const BACKEND_URL = 'http://localhost:8000';
+    const WS_URL = 'ws://localhost:8000/ws/alerts';
+    let socket = null;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchPatients();
+      initWebSocket();
+    });
+
+    // WebSocket — listen for any alert and refresh if patient-specific
+    function initWebSocket() {
+      socket = new WebSocket(WS_URL);
+
+      socket.onopen = () => {
+        setConnStatus('live');
+      };
+      socket.onclose = () => {
+        setConnStatus('reconnecting');
+        setTimeout(initWebSocket, 3000);
+      };
+      socket.onerror = () => socket.close();
+      socket.onmessage = (event) => {
+        // Re-fetch list so badges update if an IV or med event came in
+        try {
+          JSON.parse(event.data); // validate
+          fetchPatients();
+        } catch(e) {}
+      };
+    }
+
+    function setConnStatus(state) {
+      const pulse = document.getElementById('conn-dot-pulse');
+      const dot   = document.getElementById('conn-dot');
+      const text  = document.getElementById('conn-text');
+      if (state === 'live') {
+        pulse.className = 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-emerald-400';
+        dot.className   = 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500';
+        text.textContent = 'Live';
+        text.className  = 'text-emerald-400 font-medium';
+      } else {
+        pulse.className = 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-amber-400';
+        dot.className   = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
+        text.textContent = 'Reconnecting...';
+        text.className  = 'text-amber-400 font-medium';
+      }
+    }
+
+    async function fetchPatients() {
+      const grid = document.getElementById('patients-grid');
+      try {
+        const res = await fetch(`${BACKEND_URL}/patients`);
+        if (!res.ok) throw new Error('API error');
+        const patients = await res.json();
+
+        document.getElementById('patient-count').textContent = `${patients.length} patients`;
+        document.getElementById('loading-placeholder')?.remove();
+        grid.innerHTML = '';
+
+        patients.forEach((p, i) => {
+          const hasMissed = p.medication_statuses.includes('missed');
+          const ivLow     = p.iv_fill_percent < 20;
+
+          const card = document.createElement('div');
+          card.className = 'patient-card card-enter rounded-2xl p-5 flex flex-col gap-4';
+          card.style.animationDelay = `${i * 60}ms`;
+          card.setAttribute('onclick', `window.location.href='/app/patient.html?id=${p.id}'`);
+          card.setAttribute('id', `patient-card-${p.id}`);
+
+          card.innerHTML = `
+            <!-- Header row -->
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-3">
+                <div class="h-10 w-10 rounded-full bg-gradient-to-br from-brand-600/40 to-indigo-500/30 border border-brand-500/20 flex items-center justify-center shrink-0">
+                  <i class="fa-solid fa-user-injured text-brand-300 text-sm"></i>
+                </div>
+                <div>
+                  <p class="text-sm font-bold font-display text-white">${p.name}</p>
+                  <p class="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                    <i class="fa-solid fa-location-dot text-[9px]"></i> ${p.room}
+                  </p>
+                </div>
+              </div>
+              <!-- Alert badges -->
+              <div class="flex flex-col gap-1 items-end shrink-0">
+                ${hasMissed ? `<span class="badge-alert text-[10px] px-2 py-0.5 rounded-full font-bold tracking-wide bg-red-500/20 border border-red-500/40 text-red-300 flex items-center gap-1"><i class="fa-solid fa-pills text-[8px]"></i> MISSED MED</span>` : ''}
+                ${ivLow ? `<span class="badge-alert text-[10px] px-2 py-0.5 rounded-full font-bold tracking-wide bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center gap-1"><i class="fa-solid fa-droplet text-[8px]"></i> IV LOW</span>` : ''}
+                ${!hasMissed && !ivLow ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold">Stable</span>` : ''}
+              </div>
+            </div>
+
+            <!-- Staff -->
+            <div class="grid grid-cols-2 gap-2 text-[11px]">
+              <div class="bg-slate-900/40 rounded-lg px-3 py-2 border border-white/5">
+                <p class="text-slate-500 uppercase tracking-wide font-semibold text-[9px] mb-0.5">Doctor</p>
+                <p class="text-slate-200 font-medium truncate">${p.assigned_doctor}</p>
+              </div>
+              <div class="bg-slate-900/40 rounded-lg px-3 py-2 border border-white/5">
+                <p class="text-slate-500 uppercase tracking-wide font-semibold text-[9px] mb-0.5">Nurse</p>
+                <p class="text-slate-200 font-medium truncate">${p.assigned_nurse}</p>
+              </div>
+            </div>
+
+            <!-- IV bar -->
+            <div class="space-y-1">
+              <div class="flex justify-between text-[11px]">
+                <span class="text-slate-400 flex items-center gap-1.5"><i class="fa-solid fa-droplet text-[10px]"></i> IV Level</span>
+                <span class="font-mono font-semibold ${ivLow ? 'text-amber-400' : 'text-white'}">${p.iv_fill_percent.toFixed(0)}%</span>
+              </div>
+              <div class="h-1.5 w-full bg-slate-900/60 rounded-full overflow-hidden border border-white/5">
+                <div class="h-full rounded-full transition-all duration-500 ${p.iv_fill_percent < 20 ? 'bg-red-500' : p.iv_fill_percent < 40 ? 'bg-amber-500' : 'bg-brand-500'}"
+                     style="width: ${Math.max(3, p.iv_fill_percent)}%"></div>
+              </div>
+            </div>
+
+            <!-- Medication pill badges -->
+            <div class="flex items-center justify-between">
+              <div class="flex gap-1.5 flex-wrap">
+                ${p.medication_statuses.map(s => {
+                  const cls = s === 'taken'  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                            : s === 'missed' ? 'bg-red-500/15 border-red-500/30 text-red-400'
+                                             : 'bg-slate-800 border-slate-700 text-slate-400';
+                  return `<span class="text-[9px] px-2 py-0.5 rounded-full border font-bold uppercase tracking-wide ${cls}">${s}</span>`;
+                }).join('')}
+              </div>
+              <span class="text-[10px] text-slate-500 flex items-center gap-1 font-medium">
+                View details <i class="fa-solid fa-arrow-right text-[8px]"></i>
+              </span>
+            </div>
+          `;
+
+          grid.appendChild(card);
+        });
+
+      } catch (err) {
+        console.error('Failed to load patients:', err);
+        grid.innerHTML = `
+          <div class="col-span-full py-16 flex flex-col items-center justify-center text-center p-8 bg-red-950/20 border border-red-500/20 rounded-2xl">
+            <i class="fa-solid fa-circle-exclamation text-red-400 text-3xl mb-3"></i>
+            <h3 class="text-sm font-bold text-white mb-1">Failed to Load Patient Registry</h3>
+            <p class="text-xs text-slate-400 max-w-sm mb-4">Verify the FastAPI backend is running on http://127.0.0.1:8000.</p>
+            <button onclick="fetchPatients()" class="bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-200 text-xs px-4 py-2 rounded-lg font-medium transition">
+              Retry Connection
+            </button>
+          </div>
+        `;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VitalGuard — Patient Detail</title>
+  <meta name="description" content="Per-patient view showing live vitals, IV status, and medication schedule with role-based controls for doctors and nurses.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff', 100: '#e0e7ff',
+              500: '#6366f1', 600: '#4f46e5',
+              700: '#4338ca', 900: '#312e81',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at 10% 20%, #171932 0%, #0b0c16 90%);
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    .font-display { font-family: 'Outfit', sans-serif; }
+
+    .glass-panel {
+      background: rgba(17, 24, 39, 0.55);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: 0 8px 32px 0 rgba(0,0,0,0.37);
+    }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.4);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15,23,42,0.3); }
+    ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.3); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.5); }
+
+    /* Role gating — same pattern as index.html */
+    body.role-doctor  .nurse-only  { display: none !important; }
+    body.role-nurse   .doctor-only { display: none !important; }
+    body.role-ambulance .doctor-only,
+    body.role-ambulance .nurse-only { display: none !important; }
+
+    /* Vital value anomaly highlights */
+    .vital-warn  { background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.3); }
+    .vital-crit  { background: rgba(239,68,68,0.12);  border-color: rgba(239,68,68,0.3); }
+
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateX(16px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .alert-enter { animation: slide-in 0.35s ease-out forwards; }
+
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fade-in 0.4s ease-out forwards; }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen role-doctor">
+
+  <!-- Toast container -->
+  <div id="toast-container" class="fixed top-6 right-6 z-50 flex flex-col gap-3 pointer-events-none"></div>
+
+  <!-- Header -->
+  <header class="glass-panel border-b border-white/5 py-4 px-6 flex items-center justify-between sticky top-0 z-30">
+    <div class="flex items-center gap-3">
+      <a href="/app/patients.html" class="h-10 w-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center shadow-lg shadow-brand-500/20 hover:opacity-80 transition">
+        <i class="fa-solid fa-shield-halved text-white text-lg"></i>
+      </a>
+      <div>
+        <h1 class="text-xl font-bold font-display tracking-tight text-white flex items-center gap-2">
+          <span id="header-patient-name">Loading...</span>
+          <span class="text-xs bg-brand-500/10 text-brand-100 border border-brand-500/20 px-2 py-0.5 rounded-full font-mono font-normal" id="header-room">—</span>
+        </h1>
+        <p class="text-xs text-slate-400" id="header-staff">—</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-4">
+      <!-- Connection status -->
+      <div class="flex items-center gap-2 bg-slate-900/60 border border-white/5 px-3 py-1.5 rounded-lg text-xs">
+        <span class="relative flex h-2 w-2">
+          <span id="conn-dot-pulse" class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-amber-400"></span>
+          <span id="conn-dot" class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+        </span>
+        <span id="conn-text" class="text-amber-400 font-medium">Connecting...</span>
+      </div>
+
+      <!-- Role selector -->
+      <div class="flex items-center gap-2">
+        <label for="role-select" class="text-xs text-slate-400 font-semibold">
+          <i class="fa-solid fa-user-gear mr-1"></i> View:
+        </label>
+        <select id="role-select" onchange="changeRole(this.value)"
+          class="bg-slate-900 border border-white/10 rounded-lg text-xs text-slate-200 px-3 py-1.5 focus:outline-none focus:border-brand-500 transition cursor-pointer">
+          <option value="doctor">Doctor</option>
+          <option value="nurse">Nurse</option>
+          <option value="ambulance">Ambulance</option>
+        </select>
+      </div>
+
+      <!-- Back link -->
+      <a href="/app/patients.html" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-300 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-arrow-left text-[10px]"></i> All Patients
+      </a>
+    </div>
+  </header>
+
+  <!-- Error / Loading state -->
+  <div id="page-loading" class="flex-1 flex flex-col items-center justify-center text-slate-400">
+    <i class="fa-solid fa-spinner animate-spin text-3xl text-brand-500 mb-4"></i>
+    <span class="text-sm">Loading patient record...</span>
+  </div>
+
+  <!-- Main content (hidden until loaded) -->
+  <main id="page-content" class="hidden flex-1 p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl mx-auto w-full">
+
+    <!-- Left: Vitals + IV + Live Alerts -->
+    <div class="lg:col-span-1 flex flex-col gap-5">
+
+      <!-- Vitals Panel -->
+      <section class="glass-panel rounded-2xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-white/5 bg-slate-950/20 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-heart-pulse text-rose-400 animate-pulse"></i>
+            <h2 class="text-sm font-semibold font-display text-white tracking-wide uppercase">Patient Vitals</h2>
+          </div>
+          <span id="vitals-timestamp" class="text-[10px] text-slate-500 font-mono"></span>
+        </div>
+        <div id="vitals-grid" class="p-4 grid grid-cols-2 gap-3"></div>
+      </section>
+
+      <!-- IV Status Panel -->
+      <section class="glass-panel rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-droplet text-sky-400"></i>
+            <h2 class="text-sm font-semibold font-display text-white tracking-wide uppercase">IV Drip Status</h2>
+          </div>
+          <span id="iv-percent-badge" class="font-mono font-bold text-sm text-white"></span>
+        </div>
+        <div class="h-3 w-full bg-slate-900/60 rounded-full overflow-hidden border border-white/5 mb-2">
+          <div id="iv-bar" class="h-full rounded-full transition-all duration-700"></div>
+        </div>
+        <div class="flex justify-between text-[10px] text-slate-500">
+          <span>Empty</span>
+          <span id="iv-last-updated" class="font-mono"></span>
+          <span>Full</span>
+        </div>
+      </section>
+
+      <!-- Live Alert Strip -->
+      <section class="glass-panel rounded-2xl overflow-hidden flex-1">
+        <div class="px-5 py-4 border-b border-white/5 bg-slate-950/20 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-triangle-exclamation text-amber-400 animate-pulse"></i>
+            <h2 class="text-sm font-semibold font-display text-white tracking-wide uppercase">Patient Alerts</h2>
+          </div>
+          <span id="patient-alert-count" class="bg-brand-500/20 border border-brand-500/30 text-brand-200 text-xs px-2 py-0.5 rounded-full font-mono font-semibold">0</span>
+        </div>
+        <div id="patient-alerts" class="p-4 flex flex-col gap-2 max-h-64 overflow-y-auto">
+          <div id="no-alerts-msg" class="text-center py-8 text-slate-500">
+            <i class="fa-solid fa-check-circle text-emerald-500/40 text-xl mb-2 block"></i>
+            <p class="text-xs">No alerts for this patient</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Right: Medication Schedule -->
+    <div class="lg:col-span-2 flex flex-col gap-5">
+
+      <!-- Medication Table -->
+      <section class="glass-panel rounded-2xl overflow-hidden flex-1">
+        <div class="px-6 py-4 border-b border-white/5 bg-slate-950/20 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-pills text-indigo-400"></i>
+            <h2 class="text-sm font-semibold font-display text-white tracking-wide uppercase">Medication Schedule</h2>
+          </div>
+          <button onclick="fetchPatient()" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-300 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-rotate text-[10px]"></i> Refresh
+          </button>
+        </div>
+
+        <!-- Medication list -->
+        <div id="med-list" class="p-5 flex flex-col gap-3"></div>
+
+        <!-- Add Medication form — Doctor only -->
+        <div class="doctor-only px-6 pb-6">
+          <div class="border-t border-white/5 pt-5">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-3 flex items-center gap-1.5">
+              <i class="fa-solid fa-plus-circle"></i> Add Medication
+            </h3>
+            <form id="add-med-form" onsubmit="addMedication(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+              <div class="sm:col-span-1">
+                <label class="block text-[10px] text-slate-500 font-semibold mb-1 uppercase">Medicine Name</label>
+                <input type="text" id="med-name" required placeholder="e.g. Amoxicillin 500mg"
+                  class="w-full bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-brand-500 transition">
+              </div>
+              <div class="sm:col-span-1">
+                <label class="block text-[10px] text-slate-500 font-semibold mb-1 uppercase">Scheduled Time</label>
+                <input type="datetime-local" id="med-time" required
+                  class="w-full bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-white focus:outline-none focus:border-brand-500 transition">
+              </div>
+              <div>
+                <button type="submit" id="add-med-btn"
+                  class="w-full bg-gradient-to-r from-brand-600 to-indigo-500 hover:from-brand-700 hover:to-indigo-600 text-white font-semibold text-xs py-2 px-4 rounded-lg transition flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/10">
+                  <i class="fa-solid fa-prescription-bottle-medical text-[10px]"></i> Prescribe
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const BACKEND_URL    = 'http://localhost:8000';
+    const WS_URL         = 'ws://localhost:8000/ws/alerts';
+    const params         = new URLSearchParams(window.location.search);
+    const PATIENT_ID     = params.get('id');
+    let patientData      = null;
+    let patientAlertCount = 0;
+    let socket           = null;
+
+    // -------------------------------------------------------------------------
+    // Boot
+    // -------------------------------------------------------------------------
+    window.addEventListener('DOMContentLoaded', () => {
+      if (!PATIENT_ID) {
+        showError('No patient ID specified. Please go back to the patient list.');
+        return;
+      }
+      fetchPatient();
+      initWebSocket();
+    });
+
+    // -------------------------------------------------------------------------
+    // Role switching
+    // -------------------------------------------------------------------------
+    function changeRole(role) {
+      document.body.className = `flex flex-col min-h-screen role-${role}`;
+    }
+
+    // -------------------------------------------------------------------------
+    // WebSocket — filter by patient_id
+    // -------------------------------------------------------------------------
+    function initWebSocket() {
+      socket = new WebSocket(WS_URL);
+
+      socket.onopen = () => setConnStatus('live');
+      socket.onclose = () => {
+        setConnStatus('reconnecting');
+        setTimeout(initWebSocket, 3000);
+      };
+      socket.onerror = () => socket.close();
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          // If message contains alert text, show alert card in strip
+          if (data.message && (!data.patient_id || data.patient_id === PATIENT_ID)) {
+            appendPatientAlert(data);
+          }
+
+          // If event belongs to this patient (IV status, medication, or alert), refresh patient data live
+          if (data.patient_id === PATIENT_ID || !data.patient_id) {
+            fetchPatient();
+          }
+
+        } catch(e) { /* ignore malformed messages */ }
+      };
+    }
+
+    function setConnStatus(state) {
+      const pulse = document.getElementById('conn-dot-pulse');
+      const dot   = document.getElementById('conn-dot');
+      const text  = document.getElementById('conn-text');
+      if (state === 'live') {
+        pulse.className = 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-emerald-400';
+        dot.className   = 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500';
+        text.textContent = 'Live';
+        text.className  = 'text-emerald-400 font-medium';
+      } else {
+        pulse.className = 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-amber-400';
+        dot.className   = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
+        text.textContent = 'Reconnecting...';
+        text.className  = 'text-amber-400 font-medium';
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Fetch patient
+    // -------------------------------------------------------------------------
+    async function fetchPatient() {
+      try {
+        const res = await fetch(`${BACKEND_URL}/patients/${PATIENT_ID}`);
+        if (!res.ok) {
+          if (res.status === 404) throw new Error(`Patient '${PATIENT_ID}' not found.`);
+          throw new Error('Server error');
+        }
+        patientData = await res.json();
+        renderPage(patientData);
+      } catch(err) {
+        showError(err.message);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Render entire page from patient data
+    // -------------------------------------------------------------------------
+    function renderPage(p) {
+      // Show content, hide loader
+      document.getElementById('page-loading').classList.add('hidden');
+      document.getElementById('page-content').classList.remove('hidden');
+      document.getElementById('page-content').classList.add('fade-in');
+
+      // Header
+      document.title = `VitalGuard — ${p.name}`;
+      document.getElementById('header-patient-name').textContent = p.name;
+      document.getElementById('header-room').textContent = p.room;
+      document.getElementById('header-staff').textContent =
+        `${p.assigned_doctor}  ·  ${p.assigned_nurse}`;
+
+      renderVitals(p.vitals);
+      renderIV(p.iv_status);
+      renderMedications(p.medications);
+    }
+
+    // -------------------------------------------------------------------------
+    // Vitals panel
+    // -------------------------------------------------------------------------
+    function renderVitals(v) {
+      const grid = document.getElementById('vitals-grid');
+      grid.innerHTML = '';
+
+      const ts = v.last_updated
+        ? new Date(v.last_updated).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+        : '—';
+      document.getElementById('vitals-timestamp').textContent = `Updated ${ts}`;
+
+      const vitals = [
+        {
+          label: 'Heart Rate', icon: 'fa-heart-pulse', value: `${v.heart_rate} bpm`,
+          warn:  v.heart_rate < 60 || v.heart_rate > 100,
+          crit:  false,
+          warnMsg: v.heart_rate < 60 ? 'Bradycardia' : v.heart_rate > 100 ? 'Tachycardia' : '',
+        },
+        {
+          label: 'Blood Pressure', icon: 'fa-gauge-high', value: v.blood_pressure,
+          warn: false, crit: false,
+        },
+        {
+          label: 'SpO₂', icon: 'fa-lungs', value: `${v.spo2}%`,
+          crit: v.spo2 < 95,
+          warn: v.spo2 >= 95 && v.spo2 < 97,
+          warnMsg: v.spo2 < 95 ? 'Hypoxia — critical' : '',
+        },
+        {
+          label: 'Temperature', icon: 'fa-temperature-three-quarters', value: `${v.temperature}°F`,
+          warn: v.temperature > 100.4,
+          crit: v.temperature > 103,
+          warnMsg: v.temperature > 100.4 ? 'Fever' : '',
+        },
+        {
+          label: 'Resp. Rate', icon: 'fa-wind', value: `${v.respiratory_rate} /min`,
+          warn: v.respiratory_rate < 12 || v.respiratory_rate > 20,
+          crit: false,
+          warnMsg: '',
+        },
+      ];
+
+      vitals.forEach(vt => {
+        const borderCls = vt.crit ? 'vital-crit border' : vt.warn ? 'vital-warn border' : 'border border-white/5';
+        const iconColor  = vt.crit ? 'text-red-400' : vt.warn ? 'text-amber-400' : 'text-brand-400';
+        const valueColor = vt.crit ? 'text-red-300' : vt.warn ? 'text-amber-300' : 'text-white';
+
+        const el = document.createElement('div');
+        el.className = `rounded-xl p-3 bg-slate-900/40 ${borderCls} flex flex-col gap-1`;
+        el.innerHTML = `
+          <span class="text-[9px] uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1">
+            <i class="fa-solid ${vt.icon} ${iconColor} text-[9px]"></i> ${vt.label}
+          </span>
+          <span class="text-base font-bold font-mono ${valueColor}">${vt.value}</span>
+          ${vt.warnMsg ? `<span class="text-[9px] ${vt.crit ? 'text-red-400' : 'text-amber-400'} font-semibold">${vt.warnMsg}</span>` : ''}
+        `;
+        grid.appendChild(el);
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // IV Status panel
+    // -------------------------------------------------------------------------
+    function renderIV(iv) {
+      const fill = iv.fill_percent ?? 0;
+      const bar  = document.getElementById('iv-bar');
+      const badge = document.getElementById('iv-percent-badge');
+
+      bar.style.width = `${Math.max(2, fill)}%`;
+      bar.className   = `h-full rounded-full transition-all duration-700 ${
+        fill < 20 ? 'bg-red-500' : fill < 40 ? 'bg-amber-500' : 'bg-sky-500'
+      }`;
+      badge.textContent  = `${fill.toFixed(0)}%`;
+      badge.className    = `font-mono font-bold text-sm ${fill < 20 ? 'text-red-400' : fill < 40 ? 'text-amber-400' : 'text-sky-300'}`;
+
+      const ts = iv.last_updated
+        ? new Date(iv.last_updated).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+        : '';
+      document.getElementById('iv-last-updated').textContent = ts ? `Updated ${ts}` : '';
+    }
+
+    // -------------------------------------------------------------------------
+    // Medications
+    // -------------------------------------------------------------------------
+    function renderMedications(meds) {
+      const list = document.getElementById('med-list');
+      list.innerHTML = '';
+
+      if (!meds || meds.length === 0) {
+        list.innerHTML = `
+          <div class="text-center py-10 text-slate-500">
+            <i class="fa-solid fa-prescription-bottle text-2xl mb-2 block opacity-30"></i>
+            <p class="text-xs">No medications prescribed yet.</p>
+          </div>`;
+        return;
+      }
+
+      meds.forEach(med => {
+        const scheduledDate = new Date(med.scheduled_time);
+        const scheduledStr  = scheduledDate.toLocaleString([], {
+          month: 'short', day: 'numeric',
+          hour: '2-digit', minute: '2-digit'
+        });
+
+        const statusStyles = {
+          pending: { badge: 'bg-brand-500/20 border-brand-500/30 text-brand-300', label: 'Pending' },
+          taken:   { badge: 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300', label: 'Taken' },
+          missed:  { badge: 'bg-red-500/20 border-red-500/30 text-red-300', label: 'Missed' },
+        };
+        const ss = statusStyles[med.status] || statusStyles.pending;
+
+        const row = document.createElement('div');
+        row.className = 'glass-card rounded-xl px-4 py-3 flex items-center justify-between gap-4';
+        row.id = `med-row-${med.id}`;
+
+        let rightSide = '';
+        if (med.status === 'taken') {
+          const takenAt = med.taken_at
+            ? new Date(med.taken_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+            : '—';
+          rightSide = `
+            <div class="text-right text-[10px] text-slate-500">
+              <p class="font-medium text-emerald-400">${med.taken_by || '—'}</p>
+              <p class="font-mono">${takenAt}</p>
+            </div>`;
+        } else if (med.status === 'pending') {
+          // Nurse: mark taken button
+          rightSide = `
+            <button
+              class="nurse-only bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1.5"
+              onclick="markTaken('${med.id}')"
+              id="take-btn-${med.id}">
+              <i class="fa-solid fa-check text-[9px]"></i> Mark Taken
+            </button>`;
+        } else {
+          rightSide = `<span class="text-[10px] text-slate-600 italic">No action</span>`;
+        }
+
+        row.innerHTML = `
+          <div class="flex items-center gap-3 flex-1 min-w-0">
+            <div class="h-8 w-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+              <i class="fa-solid fa-capsules text-indigo-400 text-xs"></i>
+            </div>
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-white truncate">${med.name}</p>
+              <p class="text-[10px] text-slate-400 font-mono flex items-center gap-1">
+                <i class="fa-regular fa-clock text-[9px]"></i> ${scheduledStr}
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="text-[10px] px-2 py-0.5 rounded-full border font-bold uppercase tracking-wide ${ss.badge}">${ss.label}</span>
+            ${rightSide}
+          </div>
+        `;
+        list.appendChild(row);
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // Mark medication taken (Nurse action)
+    // -------------------------------------------------------------------------
+    async function markTaken(medId) {
+      const btn = document.getElementById(`take-btn-${medId}`);
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-[9px]"></i> Saving...';
+      }
+
+      // Determine nurse name from role selector label (simplified)
+      const takenBy = 'Nurse (Dashboard)';
+
+      try {
+        const res = await fetch(`${BACKEND_URL}/patients/${PATIENT_ID}/medications/${medId}/taken`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taken_by: takenBy })
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Failed to mark medication');
+        }
+        showToast('Medication marked as taken', 'success');
+        fetchPatient(); // Refresh full record
+      } catch(err) {
+        showToast(err.message, 'error');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-check text-[9px]"></i> Mark Taken';
+        }
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Add medication (Doctor action)
+    // -------------------------------------------------------------------------
+    async function addMedication(event) {
+      event.preventDefault();
+      const name     = document.getElementById('med-name').value.trim();
+      const timeLocal = document.getElementById('med-time').value;
+      const btn       = document.getElementById('add-med-btn');
+
+      if (!name || !timeLocal) return;
+
+      // Convert datetime-local to ISO-8601 UTC string
+      const scheduledTime = new Date(timeLocal).toISOString();
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-[9px]"></i> Prescribing...';
+
+      try {
+        const res = await fetch(`${BACKEND_URL}/patients/${PATIENT_ID}/medications`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, scheduled_time: scheduledTime })
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Failed to add medication');
+        }
+        showToast(`${name} prescribed successfully`, 'success');
+        document.getElementById('med-name').value  = '';
+        document.getElementById('med-time').value  = '';
+        fetchPatient();
+      } catch(err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-prescription-bottle-medical text-[10px]"></i> Prescribe';
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Patient alert strip
+    // -------------------------------------------------------------------------
+    function appendPatientAlert(data) {
+      const container = document.getElementById('patient-alerts');
+      document.getElementById('no-alerts-msg')?.remove();
+
+      patientAlertCount++;
+      document.getElementById('patient-alert-count').textContent = patientAlertCount;
+
+      const borderColors = {
+        high:   'border-red-500/40 bg-red-950/20',
+        medium: 'border-amber-500/40 bg-amber-950/20',
+        low:    'border-slate-700 bg-slate-900/30',
+      };
+
+      const card = document.createElement('div');
+      card.className = `alert-enter p-3 rounded-xl border flex flex-col gap-1 ${borderColors[data.severity] || borderColors.low}`;
+      card.innerHTML = `
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs font-bold font-display text-white">${data.room || '—'}</span>
+          <span class="text-[9px] text-slate-400 font-mono">${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}</span>
+        </div>
+        <p class="text-[11px] text-slate-300">${data.message}</p>
+      `;
+      container.insertBefore(card, container.firstChild);
+    }
+
+    // -------------------------------------------------------------------------
+    // Toast
+    // -------------------------------------------------------------------------
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const colors = {
+        success: 'bg-emerald-950/80 border-emerald-500/30 text-emerald-200',
+        error:   'bg-red-950/80 border-red-500/30 text-red-200',
+        info:    'bg-slate-900/80 border-white/10 text-slate-200',
+      };
+      const icons = {
+        success: '<i class="fa-solid fa-circle-check text-emerald-400"></i>',
+        error:   '<i class="fa-solid fa-circle-exclamation text-red-400"></i>',
+        info:    '<i class="fa-solid fa-circle-info text-brand-400"></i>',
+      };
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl border backdrop-blur-md shadow-2xl transition duration-300 transform translate-y-2 opacity-0 ${colors[type]}`;
+      toast.innerHTML = `${icons[type]} <span class="text-xs font-medium">${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // -------------------------------------------------------------------------
+    // Error state
+    // -------------------------------------------------------------------------
+    function showError(msg) {
+      document.getElementById('page-loading').innerHTML = `
+        <div class="text-center p-8">
+          <i class="fa-solid fa-circle-exclamation text-red-400 text-3xl mb-3 block"></i>
+          <p class="text-sm font-bold text-white mb-1">Failed to Load Patient</p>
+          <p class="text-xs text-slate-400 mb-4 max-w-sm">${msg}</p>
+          <a href="/app/patients.html" class="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition">
+            ← Back to Patient List
+          </a>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

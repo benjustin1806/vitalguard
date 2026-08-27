@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#0b0c16]">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VitalGuard — Real-Time Medical Command Center</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#312e81',
+            },
+            dark: {
+              bg: '#0b0c16',
+              card: 'rgba(17, 24, 39, 0.7)',
+              panel: 'rgba(31, 41, 55, 0.4)',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at 10% 20%, #171932 0%, #0b0c16 90%);
+      color: #e2e8f0;
+    }
+    
+    .font-display {
+      font-family: 'Outfit', sans-serif;
+    }
+
+    /* Glassmorphic border & background */
+    .glass-panel {
+      background: rgba(17, 24, 39, 0.55);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+    
+    .glass-card {
+      background: rgba(30, 41, 59, 0.4);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .glass-card:hover {
+      border-color: rgba(99, 102, 241, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.1), 0 8px 10px -6px rgba(99, 102, 241, 0.1);
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.3);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(99, 102, 241, 0.3);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(99, 102, 241, 0.5);
+    }
+
+    /* Role-based overrides */
+    body.role-doctor .nurse-only,
+    body.role-doctor .ambulance-only { display: none !important; }
+    
+    body.role-nurse .doctor-only,
+    body.role-nurse .ambulance-only { display: none !important; }
+    
+    body.role-ambulance .doctor-only,
+    body.role-ambulance .nurse-only { display: none !important; }
+
+    /* Highlights for Ambulance booking priority */
+    body.role-ambulance .hold-bed-btn {
+      animation: pulse-indigo 2s infinite;
+    }
+
+    @keyframes pulse-indigo {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+      }
+      50% {
+        box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
+      }
+    }
+
+    /* Fade and slide in animations for new alerts */
+    @keyframes slide-in {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .alert-card-new {
+      animation: slide-in 0.4s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col overflow-hidden role-doctor">
+  
+  <!-- Toast Notification System -->
+  <div id="toast-container" class="fixed top-6 right-6 z-50 flex flex-col gap-3"></div>
+
+  <!-- Header -->
+  <header class="glass-panel border-b border-white/5 py-4 px-6 flex items-center justify-between shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center shadow-lg shadow-brand-500/20">
+        <i class="fa-solid fa-shield-halved text-white text-lg"></i>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold font-display tracking-tight text-white flex items-center gap-2">
+          VitalGuard <span class="text-xs bg-brand-500/10 text-brand-100 border border-brand-500/20 px-2 py-0.5 rounded-full font-mono font-normal">Command Center</span>
+        </h1>
+        <p class="text-xs text-slate-400">Integrated Medical Resource & Patient Safety Monitor</p>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-white/10 ml-4">
+        <a href="/app/index.html" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 text-white shadow transition flex items-center gap-1.5">
+          <i class="fa-solid fa-gauge-high text-[11px]"></i> Resource Grid
+        </a>
+        <a href="/app/patients.html" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-hospital-user text-[11px]"></i> Patients & Vitals
+        </a>
+      </nav>
+    </div>
+
+    <!-- Active System Info & Role Selection -->
+    <div class="flex items-center gap-6">
+      <!-- Connection Status Indicator -->
+      <div class="flex items-center gap-2 bg-slate-900/60 border border-white/5 px-3 py-1.5 rounded-lg text-xs">
+        <span class="relative flex h-2 w-2">
+          <span id="conn-dot-pulse" class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-green-400"></span>
+          <span id="conn-dot" class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+        </span>
+        <span id="conn-text" class="text-slate-300 font-medium">Live Monitoring</span>
+      </div>
+
+      <!-- Role Selector -->
+      <div class="flex items-center gap-2">
+        <label for="role-select" class="text-xs text-slate-400 font-semibold"><i class="fa-solid fa-user-gear mr-1"></i> Dashboard View:</label>
+        <select id="role-select" onchange="changeRole(this.value)" class="bg-slate-900 border border-white/10 rounded-lg text-xs text-slate-200 px-3 py-1.5 focus:outline-none focus:border-brand-500 transition cursor-pointer">
+          <option value="doctor">Doctor (Clinical View)</option>
+          <option value="nurse">Nurse (Ward Monitoring)</option>
+          <option value="ambulance">Ambulance (Transit & Booking)</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Layout -->
+  <main class="flex-1 flex overflow-hidden p-6 gap-6">
+    
+    <!-- Left Section: Hospital Resource Matrix (Grid) -->
+    <section class="flex-1 flex flex-col gap-4 overflow-y-auto">
+      <div class="flex items-center justify-between shrink-0">
+        <div>
+          <h2 class="text-lg font-bold font-display text-white">Hospital Bed & Equipment Grid</h2>
+          <p class="text-xs text-slate-400">Real-time occupancy metrics and bed-hold dispatcher</p>
+        </div>
+        <button onclick="fetchHospitals()" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-300 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-rotate text-[10px]"></i> Refresh
+        </button>
+      </div>
+
+      <!-- Hospital Cards Grid -->
+      <div id="hospitals-grid" class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <!-- Rendered Dynamically -->
+        <div class="col-span-full py-20 flex flex-col items-center justify-center text-slate-400">
+          <i class="fa-solid fa-spinner animate-spin text-2xl text-brand-500 mb-2"></i>
+          <span class="text-xs">Loading regional hospital inventory...</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Section: Alerts Center & IV Monitor Feed -->
+    <section class="w-[420px] shrink-0 flex flex-col gap-6 overflow-hidden">
+      
+      <!-- Live Alerts Panel -->
+      <div class="flex-1 glass-panel rounded-2xl flex flex-col overflow-hidden">
+        <!-- Header -->
+        <div class="px-5 py-4 border-b border-white/5 bg-slate-950/20 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-triangle-exclamation text-amber-500 animate-pulse"></i>
+            <h2 class="text-sm font-semibold font-display text-white tracking-wide uppercase">Real-Time Patient Alerts</h2>
+          </div>
+          <span id="alert-count" class="bg-brand-500/20 border border-brand-500/30 text-brand-200 text-xs px-2 py-0.5 rounded-full font-mono font-semibold">0 Alerts</span>
+        </div>
+
+        <!-- Alerts Stream -->
+        <div id="alerts-stream" class="flex-1 p-4 overflow-y-auto flex flex-col gap-3">
+          <!-- Placeholder when empty -->
+          <div id="no-alerts-placeholder" class="h-full flex flex-col items-center justify-center text-center p-8 text-slate-500">
+            <div class="h-12 w-12 rounded-full border border-dashed border-slate-700 flex items-center justify-center mb-3">
+              <i class="fa-solid fa-check text-slate-400"></i>
+            </div>
+            <p class="text-xs font-semibold text-slate-400">All systems normal</p>
+            <p class="text-[11px] text-slate-500 mt-1">Incoming telemetry is clean. No active alarms.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Panel: Simulator (Visible only to Nurse/Doctor roles) -->
+      <div class="nurse-only doctor-only glass-panel rounded-2xl p-5 border border-white/5 shrink-0 bg-slate-900/10">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-3 flex items-center gap-1.5">
+          <i class="fa-solid fa-flask"></i> Telemetry Simulator
+        </h3>
+        <p class="text-[11px] text-slate-400 mb-4">Trigger a manual simulation alert to test frontend WebSocket parsing and real-time response flows.</p>
+        
+        <form id="sim-form" onsubmit="submitSimulatedAlert(event)" class="space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[10px] text-slate-500 font-semibold mb-1 uppercase">Room / Ward</label>
+              <input type="text" id="sim-room" required value="ICU Bed 6" class="w-full bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-white focus:outline-none focus:border-brand-500 transition">
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-500 font-semibold mb-1 uppercase">Severity</label>
+              <select id="sim-severity" class="w-full bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-white focus:outline-none focus:border-brand-500 transition">
+                <option value="high" class="text-red-400">Critical (High)</option>
+                <option value="medium" class="text-amber-400">Warning (Med)</option>
+                <option value="low" class="text-slate-400">Info (Low)</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-[10px] text-slate-500 font-semibold mb-1 uppercase">Alert Message</label>
+            <input type="text" id="sim-message" required value="IV drip empty warning - check infusion bottle" class="w-full bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-white focus:outline-none focus:border-brand-500 transition">
+          </div>
+          <button type="submit" class="w-full bg-gradient-to-r from-brand-600 to-indigo-500 hover:from-brand-700 hover:to-indigo-600 text-white font-semibold text-xs py-2 rounded-lg transition duration-200 flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/10">
+            <i class="fa-solid fa-paper-plane text-[10px]"></i> Dispatch Broadcast
+          </button>
+        </form>
+      </div>
+      
+    </section>
+  </main>
+
+  <!-- Script logic -->
+  <script>
+    const BACKEND_URL = 'http://localhost:8000';
+    const WS_URL = 'ws://localhost:8000/ws/alerts';
+    let socket = null;
+    let alerts = [];
+
+    // On Load
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchHospitals();
+      initWebSocket();
+      // Set default role
+      changeRole('doctor');
+    });
+
+    // Toast System
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      const colors = {
+        success: 'bg-emerald-950/80 border-emerald-500/30 text-emerald-200',
+        error: 'bg-red-950/80 border-red-500/30 text-red-200',
+        info: 'bg-slate-900/80 border-white/10 text-slate-200'
+      };
+      
+      const icons = {
+        success: '<i class="fa-solid fa-circle-check text-emerald-400"></i>',
+        error: '<i class="fa-solid fa-circle-exclamation text-red-400"></i>',
+        info: '<i class="fa-solid fa-circle-info text-brand-400"></i>'
+      };
+
+      toast.className = `flex items-center gap-3 px-4 py-3 rounded-xl border backdrop-blur-md shadow-2xl transition duration-300 transform translate-y-2 opacity-0 ${colors[type]}`;
+      toast.innerHTML = `${icons[type]} <span class="text-xs font-medium">${message}</span>`;
+      
+      container.appendChild(toast);
+      
+      // Animate in
+      setTimeout(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      }, 10);
+
+      // Remove after 4s
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Role Switching
+    function changeRole(role) {
+      document.body.className = `h-full flex flex-col overflow-hidden role-${role}`;
+      showToast(`Switched view to ${role.toUpperCase()} mode.`, 'info');
+    }
+
+    // WebSocket Management with automatic reconnect
+    function initWebSocket() {
+      const connDotPulse = document.getElementById('conn-dot-pulse');
+      const connDot = document.getElementById('conn-dot');
+      const connText = document.getElementById('conn-text');
+
+      console.log('Connecting to alert telemetry WebSocket...');
+      socket = new WebSocket(WS_URL);
+
+      socket.onopen = () => {
+        console.log('Telemetry WebSocket connected.');
+        connDotPulse.className = 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-emerald-400';
+        connDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500';
+        connText.textContent = 'Live Monitoring';
+        connText.className = 'text-emerald-400 font-medium';
+      };
+
+      socket.onclose = (event) => {
+        console.log(`WebSocket closed: ${event.reason}. Retrying in 3 seconds...`);
+        connDotPulse.className = 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-amber-400';
+        connDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
+        connText.textContent = 'Reconnecting...';
+        connText.className = 'text-amber-400 font-medium';
+        
+        setTimeout(initWebSocket, 3000);
+      };
+
+      socket.onerror = (err) => {
+        console.error('WebSocket encountered an error:', err);
+        socket.close();
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const alertData = JSON.parse(event.data);
+          handleIncomingAlert(alertData);
+        } catch (e) {
+          console.error('Failed to parse incoming alert:', e);
+        }
+      };
+    }
+
+    // Handle Incoming Web Socket Alerts
+    function handleIncomingAlert(alert) {
+      // Add timestamp
+      alert.id = 'alert_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      alert.time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      alerts.push(alert);
+
+      // Hide placeholder
+      document.getElementById('no-alerts-placeholder').style.display = 'none';
+
+      // Update badge
+      document.getElementById('alert-count').textContent = `${alerts.length} Alerts`;
+      showToast(`Emergency alert received: ${alert.room} - ${alert.message}`, 'error');
+
+      // Create DOM element
+      const stream = document.getElementById('alerts-stream');
+      const card = document.createElement('div');
+      
+      const borderColors = {
+        high: 'border-red-500/40 bg-red-950/20 text-red-100 shadow-[0_0_15px_rgba(239,68,68,0.1)]',
+        medium: 'border-amber-500/40 bg-amber-950/20 text-amber-100',
+        low: 'border-slate-700 bg-slate-900/30 text-slate-200'
+      };
+
+      const badgeColors = {
+        high: 'bg-red-500/20 border border-red-500/40 text-red-300',
+        medium: 'bg-amber-500/20 border border-amber-500/40 text-amber-300',
+        low: 'bg-slate-800 border border-slate-700 text-slate-300'
+      };
+
+      const pulseStyle = alert.severity === 'high' ? 'animate-pulse' : '';
+
+      card.className = `alert-card-new p-4 rounded-xl border flex flex-col gap-2 relative glass-panel ${borderColors[alert.severity] || borderColors.low}`;
+      card.id = alert.id;
+      
+      card.innerHTML = `
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <span class="flex h-2 w-2 ${pulseStyle}">
+              <span class="absolute inline-flex h-2 w-2 rounded-full ${alert.severity === 'high' ? 'bg-red-400' : alert.severity === 'medium' ? 'bg-amber-400' : 'bg-slate-400'}"></span>
+            </span>
+            <span class="text-xs font-bold uppercase tracking-wider font-display">${alert.room}</span>
+          </div>
+          <span class="text-[10px] px-2 py-0.5 rounded-full uppercase font-bold tracking-wider ${badgeColors[alert.severity] || badgeColors.low}">
+            ${alert.severity}
+          </span>
+        </div>
+        <p class="text-xs text-slate-300">${alert.message}</p>
+        <div class="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+          <span class="font-mono"><i class="fa-regular fa-clock mr-1"></i> ${alert.time}</span>
+          <!-- Acknowledge Button visible to Doctors/Nurses -->
+          <button onclick="acknowledgeAlert('${alert.id}')" class="doctor-only nurse-only bg-white/5 hover:bg-white/10 hover:text-white border border-white/10 rounded px-2 py-0.5 font-medium transition flex items-center gap-1">
+            <i class="fa-solid fa-check text-[8px]"></i> Dismiss
+          </button>
+        </div>
+      `;
+      
+      // Prepend to stream
+      stream.insertBefore(card, stream.firstChild);
+    }
+
+    // Dismiss alert
+    function acknowledgeAlert(alertId) {
+      const card = document.getElementById(alertId);
+      if (card) {
+        card.style.opacity = '0';
+        card.style.transform = 'scale(0.95)';
+        card.style.transition = 'all 0.3s ease';
+        setTimeout(() => {
+          card.remove();
+          alerts = alerts.filter(a => a.id !== alertId);
+          document.getElementById('alert-count').textContent = `${alerts.length} Alerts`;
+          
+          if (alerts.length === 0) {
+            document.getElementById('no-alerts-placeholder').style.display = 'flex';
+          }
+        }, 300);
+      }
+    }
+
+    // Fetch and render hospital states
+    async function fetchHospitals() {
+      const grid = document.getElementById('hospitals-grid');
+      try {
+        const response = await fetch(`${BACKEND_URL}/hospitals`);
+        if (!response.ok) throw new Error('API server returned error');
+        const hospitals = await response.json();
+        
+        // Render grid
+        grid.innerHTML = '';
+        hospitals.forEach(h => {
+          const bedPercent = Math.min(100, Math.round((h.beds_available / h.beds_total) * 100));
+          const icuPercent = Math.min(100, Math.round((h.icu_available / h.icu_total) * 100));
+          const ventPercent = Math.min(100, Math.round((h.ventilators_available / h.ventilators_total) * 100));
+          
+          const bedColor = h.beds_available === 0 ? 'bg-red-500' : h.beds_available <= 5 ? 'bg-amber-500' : 'bg-emerald-500';
+          const icuColor = h.icu_available === 0 ? 'bg-red-500' : h.icu_available <= 2 ? 'bg-amber-500' : 'bg-brand-500';
+          const ventColor = h.ventilators_available === 0 ? 'bg-red-500' : h.ventilators_available <= 1 ? 'bg-amber-500' : 'bg-indigo-400';
+
+          const card = document.createElement('div');
+          // Highlight layout if bed is available
+          card.className = `glass-card p-5 rounded-2xl flex flex-col gap-4 relative overflow-hidden ${h.beds_available > 0 ? 'ambulance-highlight' : ''}`;
+          
+          card.innerHTML = `
+            <!-- Hospital Title and General status -->
+            <div class="flex items-start justify-between">
+              <div>
+                <h3 class="text-sm font-bold font-display text-white tracking-wide">${h.name}</h3>
+                <span class="text-[10px] text-slate-400 font-mono">ID: ${h.id}</span>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-bold tracking-wider ${h.beds_available > 0 ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border border-red-500/20 text-red-400'}">
+                ${h.beds_available > 0 ? 'Beds Open' : 'Full Capacity'}
+              </span>
+            </div>
+
+            <!-- Stats Rows (Progress Bars) -->
+            <div class="space-y-3 flex-1">
+              <!-- General Beds -->
+              <div class="space-y-1">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-400 flex items-center gap-1.5"><i class="fa-solid fa-bed text-[10px]"></i> General Beds</span>
+                  <span class="font-semibold text-white font-mono">${h.beds_available} / ${h.beds_total}</span>
+                </div>
+                <div class="h-1.5 w-full bg-slate-900/60 rounded-full overflow-hidden border border-white/5">
+                  <div class="h-full rounded-full transition-all duration-500 ${bedColor}" style="width: ${Math.max(3, bedPercent)}%"></div>
+                </div>
+              </div>
+
+              <!-- ICU Beds -->
+              <div class="space-y-1">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-400 flex items-center gap-1.5"><i class="fa-solid fa-square-h text-[10px]"></i> ICU Beds</span>
+                  <span class="font-semibold text-white font-mono">${h.icu_available} / ${h.icu_total}</span>
+                </div>
+                <div class="h-1.5 w-full bg-slate-900/60 rounded-full overflow-hidden border border-white/5">
+                  <div class="h-full rounded-full transition-all duration-500 ${icuColor}" style="width: ${Math.max(3, icuPercent)}%"></div>
+                </div>
+              </div>
+
+              <!-- Ventilators -->
+              <div class="space-y-1">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-400 flex items-center gap-1.5"><i class="fa-solid fa-lungs text-[10px]"></i> Ventilators</span>
+                  <span class="font-semibold text-white font-mono">${h.ventilators_available} / ${h.ventilators_total}</span>
+                </div>
+                <div class="h-1.5 w-full bg-slate-900/60 rounded-full overflow-hidden border border-white/5">
+                  <div class="h-full rounded-full transition-all duration-500 ${ventColor}" style="width: ${Math.max(3, ventPercent)}%"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Booking/Hold Dispatch CTA -->
+            <div class="pt-2 border-t border-white/5 flex items-center justify-between shrink-0">
+              <span class="text-[10px] text-slate-500 italic">Transit booking active</span>
+              <button 
+                id="btn-hold-${h.id}" 
+                onclick="holdBed('${h.id}')" 
+                class="hold-bed-btn bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs px-4 py-2 rounded-lg transition duration-200 flex items-center gap-1.5 disabled:opacity-30 disabled:pointer-events-none"
+                ${h.beds_available === 0 ? 'disabled' : ''}
+              >
+                <i class="fa-solid fa-plus-circle"></i> Reserve Bed
+              </button>
+            </div>
+          `;
+          
+          grid.appendChild(card);
+        });
+
+      } catch (error) {
+        console.error('Failed to load hospital metrics:', error);
+        grid.innerHTML = `
+          <div class="col-span-full py-16 flex flex-col items-center justify-center text-center p-8 bg-red-950/20 border border-red-500/20 rounded-2xl">
+            <i class="fa-solid fa-circle-exclamation text-red-400 text-3xl mb-3"></i>
+            <h3 class="text-sm font-bold text-white mb-1">Failed to Sync Telemetry Grid</h3>
+            <p class="text-xs text-slate-400 max-w-sm mb-4">Please verify that your FastAPI backend is running on http://127.0.0.1:8000.</p>
+            <button onclick="fetchHospitals()" class="bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-200 text-xs px-4 py-2 rounded-lg font-medium transition">
+              Retry Connection
+            </button>
+          </div>
+        `;
+      }
+    }
+
+    // Reserve bed action
+    async function holdBed(hospitalId) {
+      const button = document.getElementById(`btn-hold-${hospitalId}`);
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> Reserving...';
+      }
+
+      try {
+        const response = await fetch(`${BACKEND_URL}/hold-bed/${hospitalId}`, {
+          method: 'POST'
+        });
+        
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.detail || 'Reservation failed');
+        }
+
+        const data = await response.json();
+        showToast(`Bed reserved successfully at ${data.name}!`, 'success');
+        
+      } catch (error) {
+        console.error('Error reserving bed:', error);
+        showToast(error.message, 'error');
+      } finally {
+        // Reload hospital grid to sync state
+        fetchHospitals();
+      }
+    }
+
+    // Submit simulated alerts
+    async function submitSimulatedAlert(event) {
+      event.preventDefault();
+      const room = document.getElementById('sim-room').value;
+      const message = document.getElementById('sim-message').value;
+      const severity = document.getElementById('sim-severity').value;
+
+      try {
+        const response = await fetch(`${BACKEND_URL}/trigger-alert`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ room, message, severity })
+        });
+        
+        if (!response.ok) throw new Error('Failed to submit simulation telemetry');
+        
+        // Reset form details
+        document.getElementById('sim-message').value = 'IV drip level low - bottle empty alert';
+        
+      } catch (error) {
+        console.error('Simulation error:', error);
+        showToast(error.message, 'error');
+      }
+    }
+
+    // Automated testing hooks for headless screenshots
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const test = urlParams.get('test');
+      if (test === 'alert') {
+        setTimeout(() => {
+          handleIncomingAlert({
+            room: 'Room 102',
+            message: 'Infusion container nearly empty',
+            severity: 'high'
+          });
+        }, 800);
+      } else if (test === 'ambulance') {
+        setTimeout(() => {
+          changeRole('ambulance');
+        }, 800);
+      }
+    });
+  </script>
+</body>
+</html>

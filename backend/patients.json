@@ -1,0 +1,113 @@
+[
+  {
+    "id": "p1",
+    "name": "Ramesh Kumar",
+    "room": "Ward 3, Bed 12",
+    "assigned_doctor": "Dr. Priya Nair",
+    "assigned_nurse": "Nurse Anita",
+    "vitals": {
+      "heart_rate": 78,
+      "blood_pressure": "120/80",
+      "spo2": 97,
+      "temperature": 98.4,
+      "respiratory_rate": 16,
+      "last_updated": "2026-08-27T10:00:00Z"
+    },
+    "iv_status": {
+      "fill_percent": 82,
+      "last_updated": "2026-08-27T10:00:00Z"
+    },
+    "medications": [
+      {
+        "id": "m1",
+        "name": "Paracetamol 500mg",
+        "scheduled_time": "2026-08-27T06:00:00Z",
+        "status": "taken",
+        "taken_at": "2026-08-27T06:12:00Z",
+        "taken_by": "Nurse Anita"
+      },
+      {
+        "id": "m2",
+        "name": "Metformin 850mg",
+        "scheduled_time": "2026-08-27T08:00:00Z",
+        "status": "missed",
+        "taken_at": null,
+        "taken_by": null
+      },
+      {
+        "id": "mf480014f",
+        "name": "dolo 650mg",
+        "scheduled_time": "2026-12-27T01:00:00.000Z",
+        "status": "pending",
+        "taken_at": null,
+        "taken_by": null
+      }
+    ]
+  },
+  {
+    "id": "p2",
+    "name": "Sunita Mehta",
+    "room": "ICU Bed 4",
+    "assigned_doctor": "Dr. Rajan Verma",
+    "assigned_nurse": "Nurse Preethi",
+    "vitals": {
+      "heart_rate": 108,
+      "blood_pressure": "145/95",
+      "spo2": 93,
+      "temperature": 101.2,
+      "respiratory_rate": 22,
+      "last_updated": "2026-08-27T11:30:00Z"
+    },
+    "iv_status": {
+      "fill_percent": 0.0,
+      "last_updated": "2026-08-27T07:45:26.276324+00:00"
+    },
+    "medications": [
+      {
+        "id": "m1",
+        "name": "Amoxicillin 500mg",
+        "scheduled_time": "2026-08-27T07:00:00Z",
+        "status": "missed",
+        "taken_at": null,
+        "taken_by": null
+      },
+      {
+        "id": "m2",
+        "name": "Amlodipine 5mg",
+        "scheduled_time": "2026-08-27T09:00:00Z",
+        "status": "pending",
+        "taken_at": null,
+        "taken_by": null
+      }
+    ]
+  },
+  {
+    "id": "p3",
+    "name": "Arjun Pillai",
+    "room": "Ward 1, Bed 5",
+    "assigned_doctor": "Dr. Priya Nair",
+    "assigned_nurse": "Nurse Anita",
+    "vitals": {
+      "heart_rate": 72,
+      "blood_pressure": "118/76",
+      "spo2": 98,
+      "temperature": 98.6,
+      "respiratory_rate": 14,
+      "last_updated": "2026-08-27T09:45:00Z"
+    },
+    "iv_status": {
+      "fill_percent": 55,
+      "last_updated": "2026-08-27T09:45:00Z"
+    },
+    "medications": [
+      {
+        "id": "m1",
+        "name": "Atorvastatin 10mg",
+        "scheduled_time": "2026-08-27T22:00:00Z",
+        "status": "pending",
+        "taken_at": null,
+        "taken_by": null
+      }
+    ]
+  }
+]
