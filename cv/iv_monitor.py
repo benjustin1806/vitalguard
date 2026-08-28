@@ -171,12 +171,29 @@ def trigger_backend_alert(fill_ratio):
 
     return success
 
+def open_camera():
+    """Tries multiple backends (DirectShow, MSMF, Default) across indices 0 and 1 to find a working webcam."""
+    backends = [cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY] if os.name == 'nt' else [cv2.CAP_ANY]
+    for idx in [0, 1, 2]:
+        for backend in backends:
+            try:
+                cap = cv2.VideoCapture(idx + backend)
+                if cap.isOpened():
+                    ret, frame = cap.read()
+                    if ret and frame is not None and frame.size > 0:
+                        print(f"[CAMERA] Successfully opened webcam (index {idx}) with backend {backend}.")
+                        return cap
+                    cap.release()
+            except Exception:
+                pass
+    return None
+
 def main():
     global hsv_lower, hsv_upper, roi_start, roi_end, selecting_roi, roi_defined
     global low_reading_counter, last_alert_time
     
     print("=================================================================")
-    print("                 VitalGuard IV Level Monitor                     ")
+    print("                 VitalGuard IV Level Monitor")
     print("=================================================================")
     print(f"Backend Target: {BACKEND_URL}")
     print(f"Room:           {ROOM_ID}")
@@ -189,10 +206,10 @@ def main():
     print(" 4. Press 'q' to Quit the program.")
     print("=================================================================\n")
 
-    # Initialize video capture (webcam 0)
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("[CAMERA ERROR] Could not open webcam. Verify it is connected and not in use.")
+    # Initialize video capture with DirectShow fallback
+    cap = open_camera()
+    if cap is None or not cap.isOpened():
+        print("[CAMERA ERROR] Could not open webcam. Verify it is connected and not in use by another app.")
         sys.exit(1)
         
     window_name = "VitalGuard IV Monitor"

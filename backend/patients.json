@@ -11,11 +11,11 @@
       "spo2": 97,
       "temperature": 98.4,
       "respiratory_rate": 16,
-      "last_updated": "2026-08-28T05:01:02.468005+00:00"
+      "last_updated": "2026-08-28T06:37:54.063682+00:00"
     },
     "iv_status": {
       "fill_percent": 82.0,
-      "last_updated": "2026-08-28T05:15:37.974524+00:00",
+      "last_updated": "2026-08-28T06:38:20.860153+00:00",
       "flow_rate_ml_hr": 125.0,
       "vol_remaining_ml": 820.0,
       "time_remaining_mins": 393,
@@ -64,7 +64,11 @@
     },
     "iv_status": {
       "fill_percent": 0.0,
-      "last_updated": "2026-08-27T07:45:26.276324+00:00"
+      "last_updated": "2026-08-28T06:44:14.346238+00:00",
+      "flow_rate_ml_hr": 125.0,
+      "vol_remaining_ml": 0.0,
+      "time_remaining_mins": 0,
+      "drip_rate_gtt_min": 41
     },
     "medications": [
       {
