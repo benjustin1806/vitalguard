@@ -19,3 +19,11 @@ Thumbs.db
 
 # Screenshots / local temp test images
 *.png
+
+# ML — large dataset & binary model (too large for Git)
+ml/data/*.csv
+ml/model.joblib
+
+# Scratch / dev utilities
+scratch/
+push.py

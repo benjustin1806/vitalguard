@@ -68,17 +68,29 @@
     .vital-warn  { background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.3); }
     .vital-crit  { background: rgba(239,68,68,0.12);  border-color: rgba(239,68,68,0.3); }
 
-    @keyframes slide-in {
-      from { opacity: 0; transform: translateX(16px); }
-      to   { opacity: 1; transform: translateX(0); }
+    @keyframes drip-down {
+      0%   { opacity: 0; transform: translateY(-4px) scale(0.6); }
+      40%  { opacity: 1; transform: translateY(12px) scale(1); }
+      80%  { opacity: 1; transform: translateY(28px) scale(0.9); }
+      100% { opacity: 0; transform: translateY(36px) scale(0.2); }
     }
-    .alert-enter { animation: slide-in 0.35s ease-out forwards; }
+    .iv-drip-active {
+      animation: drip-down 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
 
-    @keyframes fade-in {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
+    @keyframes phone-vibrate {
+      0%, 100% { transform: rotate(0deg) scale(1); }
+      15% { transform: rotate(-3deg) scale(1.03); }
+      30% { transform: rotate(3deg) scale(1.03); }
+      45% { transform: rotate(-3deg) scale(1.03); }
+      60% { transform: rotate(3deg) scale(1.03); }
+      75% { transform: rotate(-1deg) scale(1.01); }
     }
-    .fade-in { animation: fade-in 0.4s ease-out forwards; }
+    .phone-alerting {
+      animation: phone-vibrate 0.8s ease-in-out infinite;
+      border-color: rgba(239, 68, 68, 0.8) !important;
+      box-shadow: 0 0 30px rgba(239, 68, 68, 0.5) !important;
+    }
   </style>
 </head>
 <body class="flex flex-col min-h-screen role-doctor">
@@ -96,6 +108,7 @@
         <h1 class="text-xl font-bold font-display tracking-tight text-white flex items-center gap-2">
           <span id="header-patient-name">Loading...</span>
           <span class="text-xs bg-brand-500/10 text-brand-100 border border-brand-500/20 px-2 py-0.5 rounded-full font-mono font-normal" id="header-room">—</span>
+          <span id="header-risk-badge" class="hidden text-xs px-2.5 py-0.5 rounded-full font-mono font-bold border flex items-center gap-1"></span>
         </h1>
         <p class="text-xs text-slate-400" id="header-staff">—</p>
       </div>
@@ -155,22 +168,105 @@
         <div id="vitals-grid" class="p-4 grid grid-cols-2 gap-3"></div>
       </section>
 
-      <!-- IV Status Panel -->
-      <section class="glass-panel rounded-2xl p-5">
-        <div class="flex items-center justify-between mb-4">
+      <!-- IV Drip Status & Visual Fluid Container -->
+      <section class="glass-panel rounded-2xl p-5 relative overflow-hidden">
+        <div class="flex items-center justify-between mb-4 border-b border-white/5 pb-3">
           <div class="flex items-center gap-2">
-            <i class="fa-solid fa-droplet text-sky-400"></i>
-            <h2 class="text-sm font-semibold font-display text-white tracking-wide uppercase">IV Drip Status</h2>
+            <i class="fa-solid fa-flask-vial text-sky-400 text-base animate-pulse"></i>
+            <h2 class="text-sm font-semibold font-display text-white tracking-wide uppercase">IV Drip Telemetry</h2>
           </div>
-          <span id="iv-percent-badge" class="font-mono font-bold text-sm text-white"></span>
+          <span id="iv-status-pill" class="text-xs px-2.5 py-0.5 rounded-full font-mono font-bold border">Checking...</span>
         </div>
-        <div class="h-3 w-full bg-slate-900/60 rounded-full overflow-hidden border border-white/5 mb-2">
-          <div id="iv-bar" class="h-full rounded-full transition-all duration-700"></div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+
+          <!-- Left: SVG Animated IV Bag Graphic -->
+          <div class="flex flex-col items-center justify-center bg-slate-950/60 p-4 rounded-xl border border-white/5 relative">
+            <div class="relative w-24 h-44 flex flex-col items-center justify-center">
+              
+              <!-- Top Hanger -->
+              <div class="w-6 h-3 border-2 border-slate-500 rounded-t-full mb-0.5"></div>
+              <div class="w-1.5 h-3 bg-slate-500 mb-0.5"></div>
+              
+              <!-- IV Bag Outer Contour -->
+              <div class="w-20 h-32 rounded-b-2xl rounded-t-lg border-2 border-sky-400/40 bg-slate-900/80 relative overflow-hidden shadow-inner flex flex-col justify-end">
+                <!-- Scale Markings -->
+                <div class="absolute inset-y-0 right-1.5 flex flex-col justify-between py-2 text-[7px] font-mono text-slate-500 select-none z-10 pointer-events-none">
+                  <span>1000m</span>
+                  <span>750m</span>
+                  <span>500m</span>
+                  <span>250m</span>
+                  <span>0mL</span>
+                </div>
+                <!-- Dynamic Liquid Fill Level -->
+                <div id="iv-fluid-fill" class="w-full bg-gradient-to-t from-sky-600 via-sky-500 to-sky-400 transition-all duration-700 relative opacity-85" style="height: 82%;">
+                  <div class="absolute top-0 inset-x-0 h-1 bg-white/40 animate-pulse"></div>
+                </div>
+                <!-- On-bag percentage label -->
+                <div class="absolute inset-0 flex items-center justify-center font-mono font-extrabold text-sm text-white drop-shadow-md z-10" id="iv-fluid-text">82%</div>
+              </div>
+
+              <!-- Drip Chamber & Droplet -->
+              <div class="w-4 h-6 border border-slate-600 bg-slate-900/90 rounded-b-md relative flex items-center justify-center overflow-hidden">
+                <div id="iv-drip-droplet" class="w-1.5 h-2 bg-sky-400 rounded-full iv-drip-active"></div>
+              </div>
+              <div class="w-1 h-4 bg-sky-500/40"></div>
+            </div>
+
+            <span id="iv-last-updated" class="text-[9px] text-slate-500 font-mono mt-2">Updated just now</span>
+          </div>
+
+          <!-- Right: Telemetry Readouts & Controls -->
+          <div class="sm:col-span-2 flex flex-col justify-between gap-3">
+            <div class="grid grid-cols-2 gap-2">
+              <div class="bg-slate-900/50 p-2.5 rounded-lg border border-white/5">
+                <span class="text-[9px] uppercase tracking-wider text-slate-400 font-semibold block">Volume Level</span>
+                <span id="iv-volume-text" class="text-sm font-bold font-mono text-white">820 / 1000 mL</span>
+              </div>
+              <div class="bg-slate-900/50 p-2.5 rounded-lg border border-white/5">
+                <span class="text-[9px] uppercase tracking-wider text-slate-400 font-semibold block">Flow Rate</span>
+                <span id="iv-flow-rate-text" class="text-sm font-bold font-mono text-sky-300">125 mL/hr</span>
+              </div>
+              <div class="bg-slate-900/50 p-2.5 rounded-lg border border-white/5">
+                <span class="text-[9px] uppercase tracking-wider text-slate-400 font-semibold block">Drip Speed</span>
+                <span id="iv-drip-speed-text" class="text-sm font-bold font-mono text-indigo-300">41 gtt/min</span>
+              </div>
+              <div class="bg-slate-900/50 p-2.5 rounded-lg border border-white/5">
+                <span class="text-[9px] uppercase tracking-wider text-slate-400 font-semibold block">Est. Time Left</span>
+                <span id="iv-time-left-text" class="text-sm font-bold font-mono text-amber-300">6h 33m</span>
+              </div>
+            </div>
+
+            <!-- Nurse & Doctor Controls -->
+            <div class="border-t border-white/5 pt-3 space-y-2">
+              <span class="text-[10px] text-slate-400 font-semibold block uppercase">Nurse & Doctor Quick Actions</span>
+              <div class="flex flex-wrap gap-2">
+                <button onclick="setIVLevel(100)" class="bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 text-xs font-semibold px-2.5 py-1 rounded-lg transition flex items-center gap-1">
+                  <i class="fa-solid fa-rotate-right text-[9px]"></i> Refill (100%)
+                </button>
+                <button onclick="setIVLevel(15)" class="bg-amber-600/20 hover:bg-amber-600/40 border border-amber-500/30 text-amber-300 text-xs font-semibold px-2.5 py-1 rounded-lg transition flex items-center gap-1">
+                  <i class="fa-solid fa-triangle-exclamation text-[9px]"></i> Low (15%)
+                </button>
+                <button onclick="setIVLevel(0)" class="bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 text-red-300 text-xs font-semibold px-2.5 py-1 rounded-lg transition flex items-center gap-1">
+                  <i class="fa-solid fa-circle-exclamation text-[9px]"></i> Empty (0%)
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="flex justify-between text-[10px] text-slate-500">
-          <span>Empty</span>
-          <span id="iv-last-updated" class="font-mono"></span>
-          <span>Full</span>
+      </section>
+
+      <!-- Doctor Emergency SMS Dispatch Log -->
+      <section class="glass-panel rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-paper-plane text-indigo-400"></i>
+            <h3 class="text-xs font-semibold font-display text-white tracking-wide uppercase">Doctor Emergency SMS Log</h3>
+          </div>
+          <span class="text-[10px] text-slate-400 font-mono" id="doc-sms-contact">Doctor: Dr. Priya Nair</span>
+        </div>
+        <div id="doctor-sms-logs" class="flex flex-col gap-2 max-h-36 overflow-y-auto">
+          <div id="no-sms-msg" class="text-center py-4 text-slate-500 text-[11px] italic">No emergency doctor SMS dispatched yet</div>
         </div>
       </section>
 
@@ -290,6 +386,16 @@
             appendPatientAlert(data);
           }
 
+          // Nurse Smartphone Push Notification
+          if (data.nurse_phone_notification && (!data.patient_id || data.patient_id === PATIENT_ID)) {
+            triggerNursePhoneAlert(data.nurse_phone_notification);
+          }
+
+          // Doctor Emergency SMS Payload
+          if (data.doctor_sms_payload && (!data.patient_id || data.patient_id === PATIENT_ID)) {
+            appendDoctorSMSLog(data.doctor_sms_payload);
+          }
+
           // If event belongs to this patient (IV status, medication, or alert), refresh patient data live
           if (data.patient_id === PATIENT_ID || !data.patient_id) {
             fetchPatient();
@@ -349,15 +455,33 @@
       document.getElementById('header-staff').textContent =
         `${p.assigned_doctor}  ·  ${p.assigned_nurse}`;
 
-      renderVitals(p.vitals);
+      renderRiskBadgeHeader(p.risk_score);
+      renderVitals(p.vitals, p.risk_score);
       renderIV(p.iv_status);
       renderMedications(p.medications);
+    }
+
+    function renderRiskBadgeHeader(risk) {
+      const badge = document.getElementById('header-risk-badge');
+      if (!badge || !risk) return;
+
+      const isHigh = risk.is_high_risk || risk.risk_level === 'High Risk';
+      const confStr = risk.confidence ? `${(risk.confidence * 100).toFixed(0)}%` : '';
+
+      badge.classList.remove('hidden');
+      if (isHigh) {
+        badge.className = 'text-xs px-2.5 py-0.5 rounded-full font-mono font-bold bg-red-500/20 border border-red-500/40 text-red-300 flex items-center gap-1.5 animate-pulse';
+        badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red-400 text-[10px]"></i> ML Risk: High (${confStr})`;
+      } else {
+        badge.className = 'text-xs px-2.5 py-0.5 rounded-full font-mono font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center gap-1.5';
+        badge.innerHTML = `<i class="fa-solid fa-shield-check text-emerald-400 text-[10px]"></i> ML Risk: Low (${confStr})`;
+      }
     }
 
     // -------------------------------------------------------------------------
     // Vitals panel
     // -------------------------------------------------------------------------
-    function renderVitals(v) {
+    function renderVitals(v, riskScore) {
       const grid = document.getElementById('vitals-grid');
       grid.innerHTML = '';
 
@@ -413,27 +537,107 @@
         `;
         grid.appendChild(el);
       });
+
+      // Add ML Risk Score Card to the vitals grid
+      if (riskScore) {
+        const isHigh = riskScore.is_high_risk || riskScore.risk_level === 'High Risk';
+        const cardBg = isHigh ? 'bg-red-950/30 border-red-500/40' : 'bg-emerald-950/20 border-emerald-500/30';
+        const txtColor = isHigh ? 'text-red-300' : 'text-emerald-300';
+        const iconCls = isHigh ? 'fa-triangle-exclamation text-red-400' : 'fa-shield-check text-emerald-400';
+        const confText = riskScore.confidence ? `${(riskScore.confidence * 100).toFixed(0)}%` : '';
+
+        const riskEl = document.createElement('div');
+        riskEl.className = `rounded-xl p-3 border ${cardBg} flex flex-col gap-1 col-span-2 sm:col-span-1`;
+        riskEl.innerHTML = `
+          <span class="text-[9px] uppercase tracking-wider text-slate-400 font-semibold flex items-center justify-between">
+            <span><i class="fa-solid fa-brain text-brand-400 text-[9px] mr-1"></i> ML Risk Score</span>
+            <span class="text-[8px] bg-white/10 px-1.5 py-0.5 rounded font-mono text-slate-300">${confText} conf</span>
+          </span>
+          <span class="text-base font-bold font-mono ${txtColor} flex items-center gap-1.5">
+            <i class="fa-solid ${iconCls} text-xs"></i> ${riskScore.risk_level}
+          </span>
+          <span class="text-[9px] text-slate-500">RandomForest model</span>
+        `;
+        grid.appendChild(riskEl);
+      }
     }
 
     // -------------------------------------------------------------------------
-    // IV Status panel
+    // IV Status Telemetry & Graphic Container (Phase 6)
     // -------------------------------------------------------------------------
     function renderIV(iv) {
-      const fill = iv.fill_percent ?? 0;
-      const bar  = document.getElementById('iv-bar');
-      const badge = document.getElementById('iv-percent-badge');
+      if (!iv) return;
 
-      bar.style.width = `${Math.max(2, fill)}%`;
-      bar.className   = `h-full rounded-full transition-all duration-700 ${
-        fill < 20 ? 'bg-red-500' : fill < 40 ? 'bg-amber-500' : 'bg-sky-500'
-      }`;
-      badge.textContent  = `${fill.toFixed(0)}%`;
-      badge.className    = `font-mono font-bold text-sm ${fill < 20 ? 'text-red-400' : fill < 40 ? 'text-amber-400' : 'text-sky-300'}`;
+      const fill = iv.fill_percent ?? 0;
+      const flowRate = iv.flow_rate_ml_hr ?? 125;
+      const totalVol = 1000;
+      const currentVol = Math.round((fill / 100) * totalVol);
+
+      // 1. Fluid Bag Fill Level & Text
+      const fluidFillEl = document.getElementById('iv-fluid-fill');
+      const fluidTextEl = document.getElementById('iv-fluid-text');
+      const pillEl      = document.getElementById('iv-status-pill');
+
+      if (fluidFillEl) fluidFillEl.style.height = `${Math.max(4, fill)}%`;
+      if (fluidTextEl) fluidTextEl.textContent = `${fill.toFixed(0)}%`;
+
+      // Color coding & Droplet animation
+      const dropletEl = document.getElementById('iv-drip-droplet');
+      if (fill <= 0) {
+        if (fluidFillEl) fluidFillEl.className = 'w-full bg-red-600 transition-all duration-700 relative opacity-85';
+        if (pillEl) {
+          pillEl.className = 'text-xs px-2.5 py-0.5 rounded-full font-mono font-bold bg-red-500/20 border border-red-500/40 text-red-300 animate-pulse';
+          pillEl.textContent = 'EMPTY DRIP';
+        }
+        if (dropletEl) dropletEl.classList.remove('iv-drip-active');
+      } else if (fill < 20) {
+        if (fluidFillEl) fluidFillEl.className = 'w-full bg-gradient-to-t from-amber-600 to-amber-400 transition-all duration-700 relative opacity-85';
+        if (pillEl) {
+          pillEl.className = 'text-xs px-2.5 py-0.5 rounded-full font-mono font-bold bg-amber-500/20 border border-amber-500/40 text-amber-300 animate-pulse';
+          pillEl.textContent = 'CRITICALLY LOW';
+        }
+        if (dropletEl) dropletEl.classList.add('iv-drip-active');
+      } else {
+        if (fluidFillEl) fluidFillEl.className = 'w-full bg-gradient-to-t from-sky-600 via-sky-500 to-sky-400 transition-all duration-700 relative opacity-85';
+        if (pillEl) {
+          pillEl.className = 'text-xs px-2.5 py-0.5 rounded-full font-mono font-bold bg-sky-500/15 border border-sky-500/30 text-sky-300';
+          pillEl.textContent = 'NORMAL FLOW';
+        }
+        if (dropletEl) dropletEl.classList.add('iv-drip-active');
+      }
+
+      // 2. Readouts: Volume, Flow Rate, Drip Speed, Time Remaining
+      const minsLeft = iv.time_remaining_mins ?? Math.round(((currentVol / flowRate) * 60));
+      const hoursLeft = Math.floor(minsLeft / 60);
+      const remMins   = minsLeft % 60;
+      const timeStr   = fill <= 0 ? '0 mins' : `${hoursLeft > 0 ? hoursLeft + 'h ' : ''}${remMins}m`;
+      const gttMin    = iv.drip_rate_gtt_min ?? Math.round((flowRate * 20) / 60);
+
+      if (document.getElementById('iv-volume-text'))    document.getElementById('iv-volume-text').textContent   = `${currentVol} / ${totalVol} mL`;
+      if (document.getElementById('iv-flow-rate-text')) document.getElementById('iv-flow-rate-text').textContent = `${flowRate} mL/hr`;
+      if (document.getElementById('iv-drip-speed-text'))document.getElementById('iv-drip-speed-text').textContent = `${gttMin} gtt/min`;
+      if (document.getElementById('iv-time-left-text')) document.getElementById('iv-time-left-text').textContent  = timeStr;
 
       const ts = iv.last_updated
-        ? new Date(iv.last_updated).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
-        : '';
-      document.getElementById('iv-last-updated').textContent = ts ? `Updated ${ts}` : '';
+        ? new Date(iv.last_updated).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})
+        : 'just now';
+      if (document.getElementById('iv-last-updated')) document.getElementById('iv-last-updated').textContent = `Updated ${ts}`;
+    }
+
+    // Nurse Quick Refill / Simulate Level
+    async function setIVLevel(percent) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/patients/${PATIENT_ID}/iv-status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fill_percent: percent, flow_rate_ml_hr: 125 })
+        });
+        if (!res.ok) throw new Error('Failed to update IV level');
+        showToast(`IV level set to ${percent}%`, percent === 100 ? 'success' : 'error');
+        fetchPatient();
+      } catch(e) {
+        showToast(e.message, 'error');
+      }
     }
 
     // -------------------------------------------------------------------------
@@ -642,6 +846,65 @@
     }
 
     // -------------------------------------------------------------------------
+    // Nurse Smartphone Alert Trigger & Doctor SMS Dispatch Helper
+    // -------------------------------------------------------------------------
+    function triggerNursePhoneAlert(push) {
+      if (!push) return;
+      const widget = document.getElementById('nurse-phone-widget');
+      const content = document.getElementById('nurse-phone-notification');
+
+      if (widget) {
+        widget.classList.add('phone-alerting');
+        setTimeout(() => widget.classList.remove('phone-alerting'), 10000);
+      }
+
+      if (content) {
+        content.innerHTML = `
+          <div class="flex items-center justify-between text-red-400 font-bold text-[11px] animate-pulse">
+            <span class="flex items-center gap-1"><i class="fa-solid fa-bell animate-bounce"></i> ${push.title || 'CRITICAL ALERT'}</span>
+            <span class="text-[9px] font-mono text-slate-400">${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+          </div>
+          <p class="text-[11px] text-white font-medium bg-red-950/80 p-2 rounded-lg border border-red-500/40">${push.body}</p>
+          <div class="flex gap-1 mt-1">
+            <button onclick="dismissPhoneAlert()" class="w-full bg-red-600 hover:bg-red-700 text-white text-[9px] font-bold py-1 rounded shadow">ACKNOWLEDGE ALERT</button>
+          </div>
+        `;
+      }
+    }
+
+    function dismissPhoneAlert() {
+      const widget = document.getElementById('nurse-phone-widget');
+      const content = document.getElementById('nurse-phone-notification');
+      if (widget) widget.classList.remove('phone-alerting');
+      if (content) {
+        content.innerHTML = `
+          <div class="flex items-center gap-1 text-emerald-400 font-semibold text-[11px]">
+            <i class="fa-solid fa-shield-check text-[10px]"></i> Alert Acknowledged
+          </div>
+          <p class="text-[10px] text-slate-400">Nurse Anita responding to patient.</p>
+        `;
+      }
+    }
+
+    function appendDoctorSMSLog(sms) {
+      if (!sms) return;
+      const container = document.getElementById('doctor-sms-logs');
+      document.getElementById('no-sms-msg')?.remove();
+
+      const log = document.createElement('div');
+      log.className = 'glass-card p-2.5 rounded-xl border border-indigo-500/30 bg-indigo-950/30 flex flex-col gap-1 fade-in';
+      log.innerHTML = `
+        <div class="flex items-center justify-between text-[10px]">
+          <span class="font-bold text-indigo-300 flex items-center gap-1"><i class="fa-solid fa-mobile-retro"></i> ${sms.doctor_name || 'Doctor'} (${sms.doctor_phone || 'SMS Gateway'})</span>
+          <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-mono text-[8px] uppercase">${sms.status || 'SENT'}</span>
+        </div>
+        <p class="text-[11px] text-slate-200 font-mono">${sms.message}</p>
+        <span class="text-[8px] text-slate-400 font-mono text-right">${new Date(sms.timestamp || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}</span>
+      `;
+      container.insertBefore(log, container.firstChild);
+    }
+
+    // -------------------------------------------------------------------------
     // Error state
     // -------------------------------------------------------------------------
     function showError(msg) {
@@ -657,5 +920,33 @@
       `;
     }
   </script>
+
+  <!-- Nurse Smartphone Floating Widget -->
+  <div id="nurse-phone-widget" class="fixed bottom-6 right-6 z-50 w-72 glass-panel rounded-3xl border-2 border-slate-700 p-3 shadow-2xl transition-all duration-300">
+    <div class="flex items-center justify-between border-b border-white/10 pb-2 mb-2">
+      <div class="flex items-center gap-1.5">
+        <i class="fa-solid fa-mobile-screen-button text-slate-400 text-xs"></i>
+        <span class="text-xs font-bold font-display text-white">Nurse's Phone</span>
+      </div>
+      <div class="flex items-center gap-1.5 text-[9px] text-slate-400 font-mono">
+        <span>5G</span>
+        <i class="fa-solid fa-battery-three-quarters text-emerald-400"></i>
+      </div>
+    </div>
+    
+    <div id="nurse-phone-content" class="bg-slate-950/90 rounded-2xl p-3 border border-white/5 flex flex-col gap-2">
+      <div class="flex items-center justify-between text-[10px] text-slate-400 border-b border-white/5 pb-1">
+        <span class="font-semibold text-brand-300">VitalGuard Mobile App</span>
+        <span id="phone-clock" class="font-mono">10:45 AM</span>
+      </div>
+      <div id="nurse-phone-notification" class="text-xs text-slate-300 flex flex-col gap-1 py-1">
+        <div class="flex items-center gap-1 text-emerald-400 font-semibold text-[11px]">
+          <i class="fa-solid fa-shield-check text-[10px]"></i> Mobile Alert Sync Active
+        </div>
+        <p class="text-[10px] text-slate-400">Nurse Anita connected. Monitoring live IV & vitals telemetry.</p>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

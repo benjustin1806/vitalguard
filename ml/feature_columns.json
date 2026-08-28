@@ -1,0 +1,10 @@
+[
+  "Heart Rate",
+  "Respiratory Rate",
+  "Body Temperature",
+  "Oxygen Saturation",
+  "Systolic Blood Pressure",
+  "Diastolic Blood Pressure",
+  "Derived_Pulse_Pressure",
+  "Derived_MAP"
+]

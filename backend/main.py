@@ -25,6 +25,105 @@ HOSPITALS_FILE = os.path.join(os.path.dirname(__file__), "hospitals.json")
 PATIENTS_FILE  = os.path.join(os.path.dirname(__file__), "patients.json")
 
 # ---------------------------------------------------------------------------
+# ML Model Loading & Prediction Helper (Phase 6)
+# ---------------------------------------------------------------------------
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "ml", "model.joblib")
+FEATURES_PATH = os.path.join(os.path.dirname(__file__), "..", "ml", "feature_columns.json")
+
+ml_model = None
+ml_feature_columns = []
+
+def load_ml_model():
+    global ml_model, ml_feature_columns
+    if os.path.exists(MODEL_PATH) and os.path.exists(FEATURES_PATH):
+        try:
+            import joblib
+            ml_model = joblib.load(MODEL_PATH)
+            with open(FEATURES_PATH, "r") as f:
+                ml_feature_columns = json.load(f)
+            print(f"[ML] Model loaded successfully with {len(ml_feature_columns)} features.")
+        except Exception as e:
+            print(f"[ML] Warning: Could not load ML model: {e}")
+
+load_ml_model()
+
+def compute_risk_score(vitals: dict) -> dict:
+    """
+    Computes ML Risk Score for a given vitals dictionary.
+    Maps patient vitals into the exact feature vector expected by the trained RandomForest model.
+    """
+    if not vitals:
+        return {"risk_level": "Low Risk", "confidence": 0.5, "is_high_risk": False, "method": "default"}
+
+    hr = float(vitals.get("heart_rate") or 75)
+    rr = float(vitals.get("respiratory_rate") or 16)
+    spo2 = float(vitals.get("spo2") or 98)
+    
+    # Temperature: Convert Fahrenheit (patient data) to Celsius (dataset format)
+    temp_f = float(vitals.get("temperature") or 98.6)
+    temp_c = (temp_f - 32.0) * 5.0 / 9.0
+
+    # Blood Pressure parsing
+    bp_str = str(vitals.get("blood_pressure") or "120/80")
+    try:
+        parts = bp_str.split("/")
+        systolic = float(parts[0])
+        diastolic = float(parts[1])
+    except Exception:
+        systolic, diastolic = 120.0, 80.0
+
+    pulse_pressure = systolic - diastolic
+    map_val = diastolic + (systolic - diastolic) / 3.0
+
+    feature_dict = {
+        "Heart Rate": hr,
+        "Respiratory Rate": rr,
+        "Body Temperature": temp_c,
+        "Oxygen Saturation": spo2,
+        "Systolic Blood Pressure": systolic,
+        "Diastolic Blood Pressure": diastolic,
+        "Derived_Pulse_Pressure": pulse_pressure,
+        "Derived_MAP": map_val
+    }
+
+    if ml_model is not None and ml_feature_columns:
+        try:
+            import pandas as pd
+            input_df = pd.DataFrame([feature_dict])[ml_feature_columns]
+            pred = ml_model.predict(input_df)[0]
+            probas = ml_model.predict_proba(input_df)[0]
+            classes = list(ml_model.classes_)
+            
+            high_risk_idx = classes.index("High Risk") if "High Risk" in classes else 1
+            confidence = float(probas[high_risk_idx]) if len(probas) > high_risk_idx else 0.5
+            if str(pred) == "Low Risk":
+                confidence = 1.0 - confidence
+            
+            return {
+                "risk_level": str(pred),
+                "confidence": round(confidence, 4),
+                "is_high_risk": str(pred) == "High Risk",
+                "method": "ml_random_forest",
+                "vitals_evaluated": {
+                    "heart_rate": hr,
+                    "spo2": spo2,
+                    "temp_c": round(temp_c, 2),
+                    "bp": f"{int(systolic)}/{int(diastolic)}"
+                }
+            }
+        except Exception as e:
+            print(f"[ML] Prediction error: {e}")
+
+    # Fallback heuristic if model not available
+    is_high = spo2 < 95 or hr > 110 or hr < 50 or temp_f > 102.0
+    return {
+        "risk_level": "High Risk" if is_high else "Low Risk",
+        "confidence": 0.85 if is_high else 0.90,
+        "is_high_risk": is_high,
+        "method": "heuristic_fallback"
+    }
+
+# ---------------------------------------------------------------------------
 # Pydantic Models
 # ---------------------------------------------------------------------------
 
@@ -51,6 +150,7 @@ class TakenPayload(BaseModel):
 
 class IVStatusPayload(BaseModel):
     fill_percent: float   # 0–100
+    flow_rate_ml_hr: Optional[float] = 125.0
 
 # ---------------------------------------------------------------------------
 # In-memory WebSocket connection registry
@@ -198,20 +298,20 @@ async def broadcast_alert(data: dict):
             active_connections.discard(connection)
 
 # ---------------------------------------------------------------------------
-# Patient routes — Phase 5
+# Patient routes — Phase 5 & 6 (ML Risk Scoring)
 # ---------------------------------------------------------------------------
 
 @app.get("/patients")
 def get_patients():
     """
     Return a lightweight summary list of all patients:
-    id, name, room, assigned staff, iv fill_percent, and medication statuses.
-    Avoids returning the full vitals object to keep the list response lean.
+    id, name, room, assigned staff, iv fill_percent, medication statuses, and ML risk_score.
     """
     patients = load_patients()
     summary = []
     for p in patients:
         med_statuses = [m["status"] for m in p.get("medications", [])]
+        risk_score = compute_risk_score(p.get("vitals", {}))
         summary.append({
             "id": p["id"],
             "name": p["name"],
@@ -220,15 +320,15 @@ def get_patients():
             "assigned_nurse": p["assigned_nurse"],
             "iv_fill_percent": p.get("iv_status", {}).get("fill_percent", 100),
             "medication_statuses": med_statuses,
+            "risk_score": risk_score,
         })
     return summary
 
 @app.get("/patients/{patient_id}")
 def get_patient(patient_id: str):
     """
-    Return the full patient record.
-    Also checks for overdue pending medications and marks them 'missed' before
-    returning, persisting the change to file if any were updated.
+    Return the full patient record including ML risk_score.
+    Also checks for overdue pending medications and marks them 'missed' before returning.
     """
     patients = load_patients()
     patient = find_patient(patients, patient_id)
@@ -237,13 +337,33 @@ def get_patient(patient_id: str):
     if check_missed_medications(patient):
         save_patients(patients)
 
-    return patient
+    # Calculate dynamic risk score
+    patient_copy = dict(patient)
+    patient_copy["risk_score"] = compute_risk_score(patient.get("vitals", {}))
+    return patient_copy
+
+@app.post("/patients/{patient_id}/risk-score")
+def get_patient_risk_score(patient_id: str):
+    """
+    Dedicated endpoint to retrieve or evaluate the ML Risk Score for a patient.
+    """
+    patients = load_patients()
+    patient = find_patient(patients, patient_id)
+    vitals = patient.get("vitals", {})
+    risk = compute_risk_score(vitals)
+    return {
+        "patient_id": patient_id,
+        "patient_name": patient["name"],
+        "vitals": vitals,
+        "risk_score": risk
+    }
 
 @app.patch("/patients/{patient_id}/vitals")
 def update_vitals(patient_id: str, payload: VitalsPayload):
     """
     Update one or more vitals fields for a patient.
     Only provided (non-None) fields are updated. Stamps last_updated.
+    Returns updated patient object with new risk_score.
     """
     patients = load_patients()
     patient = find_patient(patients, patient_id)
@@ -254,7 +374,10 @@ def update_vitals(patient_id: str, payload: VitalsPayload):
     vitals["last_updated"] = datetime.now(timezone.utc).isoformat()
 
     save_patients(patients)
-    return patient
+
+    patient_copy = dict(patient)
+    patient_copy["risk_score"] = compute_risk_score(vitals)
+    return patient_copy
 
 @app.post("/patients/{patient_id}/medications")
 def add_medication(patient_id: str, payload: MedicationPayload):
@@ -308,42 +431,85 @@ def mark_medication_taken(patient_id: str, med_id: str, payload: TakenPayload):
 @app.patch("/patients/{patient_id}/iv-status")
 async def update_iv_status(patient_id: str, payload: IVStatusPayload):
     """
-    Update a patient's IV fill percentage.
-    Broadcasts iv_updated event to all WebSocket clients.
-    If fill_percent drops below 20%, also broadcasts a critical alert.
+    Update a patient's IV fill percentage and flow rate.
+    Calculates volume remaining, time remaining, and drip rate.
+    Broadcasts iv_updated event plus Nurse Phone Alert & Doctor SMS Payload to WebSocket clients.
     """
     LOW_IV_THRESHOLD = 20.0
+    TOTAL_BAG_VOLUME_ML = 1000.0  # 1000 mL standard IV bag
 
     patients = load_patients()
     patient = find_patient(patients, patient_id)
 
     iv = patient.setdefault("iv_status", {})
     iv["fill_percent"] = payload.fill_percent
+    flow_rate = payload.flow_rate_ml_hr if payload.flow_rate_ml_hr is not None else iv.get("flow_rate_ml_hr", 125.0)
+    iv["flow_rate_ml_hr"] = flow_rate
+
+    # Calculate volume remaining (mL) and time remaining (mins)
+    vol_remaining_ml = (payload.fill_percent / 100.0) * TOTAL_BAG_VOLUME_ML
+    time_remaining_mins = int((vol_remaining_ml / flow_rate) * 60.0) if flow_rate > 0 else 0
+    drip_rate_gtt_min = int((flow_rate * 20.0) / 60.0)  # Standard 20 gtt/mL drop factor
+
+    iv["vol_remaining_ml"] = round(vol_remaining_ml, 1)
+    iv["time_remaining_mins"] = time_remaining_mins
+    iv["drip_rate_gtt_min"] = drip_rate_gtt_min
     iv["last_updated"] = datetime.now(timezone.utc).isoformat()
+
     save_patients(patients)
 
-    # 1. Always broadcast IV status update so UI gauges refresh live
+    now_iso = datetime.now(timezone.utc).isoformat()
+    doctor_name = patient.get("assigned_doctor", "Dr. Priya Nair")
+    nurse_name = patient.get("assigned_nurse", "Nurse Anita")
+
+    # 1. Broadcast IV status update so UI gauges and flow indicators refresh live
     update_event = {
         "event": "iv_updated",
         "patient_id": patient_id,
         "patient_name": patient["name"],
         "room": patient["room"],
         "fill_percent": payload.fill_percent,
+        "flow_rate_ml_hr": flow_rate,
+        "time_remaining_mins": time_remaining_mins,
+        "drip_rate_gtt_min": drip_rate_gtt_min,
+        "iv_status": iv
     }
     await broadcast_alert(update_event)
 
-    # 2. Broadcast high-severity alert if critically low
+    # 2. Critical notification dispatch if low or empty
     if payload.fill_percent < LOW_IV_THRESHOLD:
+        is_empty = payload.fill_percent <= 0.0
+        severity_label = "EMPTY" if is_empty else "CRITICALLY LOW"
+
+        nurse_push = {
+            "title": f"🚨 IV DRIP {severity_label}",
+            "body": f"Ward {patient['room']}: IV bag for {patient['name']} is {severity_label.lower()} ({payload.fill_percent:.0f}%). Replace immediately!",
+            "timestamp": now_iso,
+            "patient_id": patient_id,
+            "patient_name": patient["name"],
+            "room": patient["room"],
+            "severity": "high"
+        }
+
+        doctor_sms = {
+            "doctor_name": doctor_name,
+            "doctor_phone": "+1 (555) 019-2834",
+            "message": f"URGENT ALERT: Patient {patient['name']} ({patient['room']}) IV bag is {severity_label} ({payload.fill_percent:.0f}%). {nurse_name} notified.",
+            "timestamp": now_iso,
+            "status": "DELIVERED VIA VITALGUARD SMS",
+            "patient_id": patient_id,
+            "patient_name": patient["name"]
+        }
+
         alert = {
             "event": "alert",
             "room": patient["room"],
-            "message": (
-                f"IV drip critically low ({payload.fill_percent:.0f}%) "
-                f"for {patient['name']} — refill required immediately."
-            ),
+            "message": f"IV drip {severity_label.lower()} ({payload.fill_percent:.0f}%) for {patient['name']} — nurse & doctor notified.",
             "severity": "high",
             "patient_id": patient_id,
             "patient_name": patient["name"],
+            "nurse_phone_notification": nurse_push,
+            "doctor_sms_payload": doctor_sms
         }
         await broadcast_alert(alert)
 
