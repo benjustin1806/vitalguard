@@ -6,19 +6,19 @@
     "assigned_doctor": "Dr. Priya Nair",
     "assigned_nurse": "Nurse Anita",
     "vitals": {
-      "heart_rate": 78,
+      "heart_rate": 88,
       "blood_pressure": "120/80",
       "spo2": 97,
       "temperature": 98.4,
       "respiratory_rate": 16,
-      "last_updated": "2026-08-28T06:37:54.063682+00:00"
+      "last_updated": "2026-08-29T04:00:26.509128+00:00"
     },
     "iv_status": {
-      "fill_percent": 82.0,
-      "last_updated": "2026-08-28T06:38:20.860153+00:00",
+      "fill_percent": 15.0,
+      "last_updated": "2026-08-29T04:00:26.608965+00:00",
       "flow_rate_ml_hr": 125.0,
-      "vol_remaining_ml": 820.0,
-      "time_remaining_mins": 393,
+      "vol_remaining_ml": 150.0,
+      "time_remaining_mins": 72,
       "drip_rate_gtt_min": 41
     },
     "medications": [
@@ -42,9 +42,17 @@
         "id": "mf480014f",
         "name": "dolo 650mg",
         "scheduled_time": "2026-12-27T01:00:00.000Z",
-        "status": "pending",
-        "taken_at": null,
-        "taken_by": null
+        "status": "taken",
+        "taken_at": "2026-08-28T07:00:00.430173+00:00",
+        "taken_by": "Nurse (Dashboard)"
+      },
+      {
+        "id": "m871c7b75",
+        "name": "Paracetamol 500mg",
+        "scheduled_time": "2026-08-30T12:00:00Z",
+        "status": "taken",
+        "taken_at": "2026-08-29T04:00:26.604087+00:00",
+        "taken_by": "Dr. Priya Nair"
       }
     ]
   },
@@ -63,11 +71,11 @@
       "last_updated": "2026-08-27T11:30:00Z"
     },
     "iv_status": {
-      "fill_percent": 0.0,
-      "last_updated": "2026-08-28T06:44:14.346238+00:00",
+      "fill_percent": 100.0,
+      "last_updated": "2026-08-28T07:14:15.937681+00:00",
       "flow_rate_ml_hr": 125.0,
-      "vol_remaining_ml": 0.0,
-      "time_remaining_mins": 0,
+      "vol_remaining_ml": 1000.0,
+      "time_remaining_mins": 480,
       "drip_rate_gtt_min": 41
     },
     "medications": [
@@ -83,6 +91,22 @@
         "id": "m2",
         "name": "Amlodipine 5mg",
         "scheduled_time": "2026-08-27T09:00:00Z",
+        "status": "missed",
+        "taken_at": null,
+        "taken_by": null
+      },
+      {
+        "id": "m594dd565",
+        "name": "tachycardia",
+        "scheduled_time": "2026-12-28T07:29:00.000Z",
+        "status": "pending",
+        "taken_at": null,
+        "taken_by": null
+      },
+      {
+        "id": "m9e59698a",
+        "name": "dolo 650mg",
+        "scheduled_time": "2026-08-28T07:29:00.000Z",
         "status": "missed",
         "taken_at": null,
         "taken_by": null
@@ -112,7 +136,7 @@
         "id": "m1",
         "name": "Atorvastatin 10mg",
         "scheduled_time": "2026-08-27T22:00:00Z",
-        "status": "pending",
+        "status": "missed",
         "taken_at": null,
         "taken_by": null
       }

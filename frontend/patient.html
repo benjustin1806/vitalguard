@@ -728,13 +728,23 @@
         btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-[9px]"></i> Saving...';
       }
 
-      // Determine nurse name from role selector label (simplified)
-      const takenBy = 'Nurse (Dashboard)';
+      const token = localStorage.getItem('vitalguard_token');
+      const staffRaw = localStorage.getItem('vitalguard_staff');
+      let takenBy = 'Nurse (Dashboard)';
+      if (staffRaw) {
+        try {
+          const staff = JSON.parse(staffRaw);
+          takenBy = `${staff.name} (${staff.role})`;
+        } catch(e) {}
+      }
 
       try {
         const res = await fetch(`${BACKEND_URL}/patients/${PATIENT_ID}/medications/${medId}/taken`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({ taken_by: takenBy })
         });
         if (!res.ok) {
@@ -763,8 +773,8 @@
 
       if (!name || !timeLocal) return;
 
-      // Convert datetime-local to ISO-8601 UTC string
       const scheduledTime = new Date(timeLocal).toISOString();
+      const token = localStorage.getItem('vitalguard_token');
 
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-[9px]"></i> Prescribing...';
@@ -772,7 +782,10 @@
       try {
         const res = await fetch(`${BACKEND_URL}/patients/${PATIENT_ID}/medications`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({ name, scheduled_time: scheduledTime })
         });
         if (!res.ok) {
@@ -790,6 +803,7 @@
         btn.innerHTML = '<i class="fa-solid fa-prescription-bottle-medical text-[10px]"></i> Prescribe';
       }
     }
+
 
     // -------------------------------------------------------------------------
     // Patient alert strip

@@ -1,13 +1,15 @@
 import os
 import json
 import uuid
+import hashlib
 from datetime import datetime, timezone
-from typing import List, Optional, Set
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from typing import List, Optional, Set, Dict
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
+
 
 app = FastAPI(title="VitalGuard Backend")
 
@@ -23,6 +25,34 @@ app.add_middleware(
 # File paths
 HOSPITALS_FILE = os.path.join(os.path.dirname(__file__), "hospitals.json")
 PATIENTS_FILE  = os.path.join(os.path.dirname(__file__), "patients.json")
+STAFF_FILE     = os.path.join(os.path.dirname(__file__), "staff.json")
+
+# In-memory session token store (token_str -> staff_dict)
+TOKEN_STORE: Dict[str, dict] = {}
+
+def load_staff() -> List[dict]:
+    """Read staff records from JSON file."""
+    if not os.path.exists(STAFF_FILE):
+        return []
+    try:
+        with open(STAFF_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def hash_password(password: str, salt: str) -> str:
+    """Computes SHA-256 hash with salt for secure password verification."""
+    return hashlib.sha256((salt + password).encode()).hexdigest()
+
+def get_current_staff(authorization: Optional[str] = Header(None)) -> dict:
+    """Dependency to enforce Bearer token authentication on protected routes."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    token = authorization.replace("Bearer ", "").strip()
+    if token not in TOKEN_STORE:
+        raise HTTPException(status_code=401, detail="Invalid or expired session token")
+    return TOKEN_STORE[token]
+
 
 # ---------------------------------------------------------------------------
 # ML Model Loading & Prediction Helper (Phase 6)
@@ -127,12 +157,17 @@ def compute_risk_score(vitals: dict) -> dict:
 # Pydantic Models
 # ---------------------------------------------------------------------------
 
+class LoginPayload(BaseModel):
+    username: str
+    password: str
+
 class AlertPayload(BaseModel):
     room: str
     message: str
     severity: str
     patient_id: Optional[str] = None
     patient_name: Optional[str] = None
+
 
 class VitalsPayload(BaseModel):
     heart_rate: Optional[int] = None
@@ -229,7 +264,39 @@ def check_missed_medications(patient: dict) -> bool:
     return changed
 
 # ---------------------------------------------------------------------------
-# Hospital routes (unchanged)
+# Staff Authentication Routes (Phase 7 Part A)
+# ---------------------------------------------------------------------------
+
+@app.post("/login")
+def login(payload: LoginPayload):
+    """
+    Staff login endpoint. Validates username and hashed password.
+    Returns session token and staff metadata.
+    """
+    staff_list = load_staff()
+    for s in staff_list:
+        if s["username"] == payload.username:
+            computed = hash_password(payload.password, s.get("salt", ""))
+            if computed == s["password_hash"]:
+                token = f"token_{uuid.uuid4().hex}"
+                staff_dict = {
+                    "id": s["id"],
+                    "name": s["name"],
+                    "role": s["role"],
+                    "username": s["username"],
+                    "assigned_patient_ids": s.get("assigned_patient_ids", [])
+                }
+                TOKEN_STORE[token] = staff_dict
+                return {"token": token, "staff": staff_dict}
+    raise HTTPException(status_code=401, detail="Invalid username or password")
+
+@app.get("/me")
+def get_me(current_staff: dict = Depends(get_current_staff)):
+    """Return currently authenticated staff profile."""
+    return current_staff
+
+# ---------------------------------------------------------------------------
+# Hospital routes & Ambulance Routing (Phase 7 Part B)
 # ---------------------------------------------------------------------------
 
 @app.get("/hospitals")
@@ -238,10 +305,10 @@ def get_hospitals():
     return load_hospitals()
 
 @app.post("/hold-bed/{hospital_id}")
-def hold_bed(hospital_id: str):
+async def hold_bed(hospital_id: str):
     """
     Decrement the beds_available count for a specific hospital by 1.
-    Returns the updated hospital info.
+    Broadcasts an ambulance dispatch event with Google Maps navigation link over WebSocket.
     """
     hospitals = load_hospitals()
     for h in hospitals:
@@ -250,8 +317,28 @@ def hold_bed(hospital_id: str):
                 raise HTTPException(status_code=400, detail="No beds available to hold")
             h["beds_available"] -= 1
             save_hospitals(hospitals)
+
+            # Generate Google Maps driving directions URL
+            lat = h.get("latitude", 12.9716)
+            lng = h.get("longitude", 77.5946)
+            maps_url = f"https://www.google.com/maps/dir/?api=1&destination={lat},{lng}&travelmode=driving"
+
+            dispatch_event = {
+                "event": "alert",
+                "type": "ambulance_dispatch",
+                "hospital_id": h["id"],
+                "hospital_name": h["name"],
+                "hospital_address": h.get("address", "Emergency Hospital Location"),
+                "latitude": lat,
+                "longitude": lng,
+                "maps_url": maps_url,
+                "message": f"EMERGENCY DISPATCH: Bed held at {h['name']}. Direct navigation route generated.",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            await broadcast_alert(dispatch_event)
             return h
     raise HTTPException(status_code=404, detail="Hospital not found")
+
 
 # ---------------------------------------------------------------------------
 # Alert broadcast route (extended with optional patient fields)
@@ -302,14 +389,22 @@ async def broadcast_alert(data: dict):
 # ---------------------------------------------------------------------------
 
 @app.get("/patients")
-def get_patients():
+def get_patients(authorization: Optional[str] = Header(None)):
     """
-    Return a lightweight summary list of all patients:
-    id, name, room, assigned staff, iv fill_percent, medication statuses, and ML risk_score.
+    Return a lightweight summary list of all patients.
+    If a valid Bearer token is provided, filters results to only assigned patients.
     """
     patients = load_patients()
+    allowed_ids = None
+    if authorization:
+        token = authorization.replace("Bearer ", "").strip()
+        if token in TOKEN_STORE:
+            allowed_ids = set(TOKEN_STORE[token].get("assigned_patient_ids", []))
+
     summary = []
     for p in patients:
+        if allowed_ids is not None and p["id"] not in allowed_ids:
+            continue
         med_statuses = [m["status"] for m in p.get("medications", [])]
         risk_score = compute_risk_score(p.get("vitals", {}))
         summary.append({
@@ -359,7 +454,7 @@ def get_patient_risk_score(patient_id: str):
     }
 
 @app.patch("/patients/{patient_id}/vitals")
-def update_vitals(patient_id: str, payload: VitalsPayload):
+def update_vitals(patient_id: str, payload: VitalsPayload, current_staff: dict = Depends(get_current_staff)):
     """
     Update one or more vitals fields for a patient.
     Only provided (non-None) fields are updated. Stamps last_updated.
@@ -380,7 +475,7 @@ def update_vitals(patient_id: str, payload: VitalsPayload):
     return patient_copy
 
 @app.post("/patients/{patient_id}/medications")
-def add_medication(patient_id: str, payload: MedicationPayload):
+def add_medication(patient_id: str, payload: MedicationPayload, current_staff: dict = Depends(get_current_staff)):
     """
     Add a new medication to a patient's medication list.
     Status defaults to 'pending'.
@@ -401,7 +496,7 @@ def add_medication(patient_id: str, payload: MedicationPayload):
     return new_med
 
 @app.patch("/patients/{patient_id}/medications/{med_id}/taken")
-def mark_medication_taken(patient_id: str, med_id: str, payload: TakenPayload):
+def mark_medication_taken(patient_id: str, med_id: str, payload: TakenPayload, current_staff: dict = Depends(get_current_staff)):
     """
     Mark a specific medication as taken for a patient.
     Stamps taken_at with current UTC time and records taken_by from payload.
@@ -425,6 +520,7 @@ def mark_medication_taken(patient_id: str, med_id: str, payload: TakenPayload):
                 "medication": med,
                 "event": "medication_taken",
             }
+
 
     raise HTTPException(status_code=404, detail=f"Medication '{med_id}' not found for patient '{patient_id}'")
 

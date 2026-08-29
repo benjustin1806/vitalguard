@@ -2,8 +2,11 @@
   {
     "id": "h1",
     "name": "St. Mary Medical Center",
+    "address": "123 Healthcare Blvd, Central District",
+    "latitude": 12.9348,
+    "longitude": 77.6062,
     "beds_total": 120,
-    "beds_available": 0,
+    "beds_available": 3,
     "icu_total": 24,
     "icu_available": 4,
     "ventilators_total": 15,
@@ -12,18 +15,24 @@
   {
     "id": "h2",
     "name": "City General Hospital",
+    "address": "456 Emergency Way, Metro Area",
+    "latitude": 12.8938,
+    "longitude": 77.5976,
     "beds_total": 200,
-    "beds_available": 2,
+    "beds_available": 8,
     "icu_total": 45,
-    "icu_available": 0,
+    "icu_available": 2,
     "ventilators_total": 30,
-    "ventilators_available": 0
+    "ventilators_available": 3
   },
   {
     "id": "h3",
     "name": "Valley Care Clinic",
+    "address": "789 Medical Park Rd, North Hills",
+    "latitude": 12.9582,
+    "longitude": 77.6483,
     "beds_total": 45,
-    "beds_available": 0,
+    "beds_available": 3,
     "icu_total": 8,
     "icu_available": 3,
     "ventilators_total": 4,
@@ -32,11 +41,14 @@
   {
     "id": "h4",
     "name": "Hope Children's Hospital",
+    "address": "101 Pediatric Ave, Westside",
+    "latitude": 12.9716,
+    "longitude": 77.5946,
     "beds_total": 90,
-    "beds_available": 0,
+    "beds_available": 5,
     "icu_total": 15,
-    "icu_available": 0,
+    "icu_available": 3,
     "ventilators_total": 10,
-    "ventilators_available": 0
+    "ventilators_available": 2
   }
 ]

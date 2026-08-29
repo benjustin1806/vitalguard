@@ -1,0 +1,20 @@
+[
+  {
+    "id": "s1",
+    "name": "Dr. Priya Nair",
+    "role": "doctor",
+    "username": "priya.nair",
+    "password_hash": "b8101e084fdaf2a7bcf311585f7f7ca627075a077f4a013ae0cd11c4d627bb1e",
+    "salt": "salt_priya_",
+    "assigned_patient_ids": ["p1", "p2", "p3"]
+  },
+  {
+    "id": "s2",
+    "name": "Nurse Anita",
+    "role": "nurse",
+    "username": "anita",
+    "password_hash": "1b6af584e52c944a505e8492ee5ccd627bc333f5acc427cfaa612b45a0c615dd",
+    "salt": "salt_anita_",
+    "assigned_patient_ids": ["p1", "p3"]
+  }
+]

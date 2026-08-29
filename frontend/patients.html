@@ -104,6 +104,17 @@
     </div>
 
     <div class="flex items-center gap-4">
+      <!-- Staff Profile Badge -->
+      <div id="staff-profile" class="flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 px-3 py-1.5 rounded-lg text-xs">
+        <i class="fa-solid fa-user-doctor text-brand-300 text-[11px]"></i>
+        <span id="staff-name" class="text-slate-200 font-medium">Logged In</span>
+      </div>
+
+      <!-- Logout Button -->
+      <button onclick="logoutStaff()" class="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 rounded-lg px-3 py-1.5 text-xs font-medium transition flex items-center gap-1.5">
+        <i class="fa-solid fa-right-from-bracket text-[10px]"></i> Logout
+      </button>
+
       <!-- Connection status -->
       <div class="flex items-center gap-2 bg-slate-900/60 border border-white/5 px-3 py-1.5 rounded-lg text-xs">
         <span class="relative flex h-2 w-2">
@@ -124,7 +135,7 @@
   <main class="flex-1 p-6 max-w-5xl mx-auto w-full">
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="text-lg font-bold font-display text-white">Admitted Patients</h2>
+        <h2 class="text-lg font-bold font-display text-white">Assigned Patients</h2>
         <p class="text-xs text-slate-400 mt-0.5">Click a patient to view full vitals, IV status, and medication schedule</p>
       </div>
       <span id="patient-count" class="text-xs text-slate-500 font-mono"></span>
@@ -135,7 +146,7 @@
       <!-- Loading state -->
       <div id="loading-placeholder" class="col-span-full py-20 flex flex-col items-center justify-center text-slate-400">
         <i class="fa-solid fa-spinner animate-spin text-2xl text-brand-500 mb-3"></i>
-        <span class="text-xs">Loading patient registry...</span>
+        <span class="text-xs">Loading assigned patient registry...</span>
       </div>
     </div>
   </main>
@@ -145,9 +156,34 @@
     const WS_URL = 'ws://localhost:8000/ws/alerts';
     let socket = null;
 
-    window.addEventListener('DOMContentLoaded', () => {
-      fetchPatients();
-      initWebSocket();
+    function checkAuth() {
+      const token = localStorage.getItem('vitalguard_token');
+      const staffRaw = localStorage.getItem('vitalguard_staff');
+      if (!token || !staffRaw) {
+        window.location.href = '/app/login.html';
+        return null;
+      }
+      try {
+        const staff = JSON.parse(staffRaw);
+        document.getElementById('staff-name').innerText = `${staff.name} (${staff.role.toUpperCase()})`;
+        return token;
+      } catch (e) {
+        window.location.href = '/app/login.html';
+        return null;
+      }
+    }
+
+    function logoutStaff() {
+      localStorage.removeItem('vitalguard_token');
+      localStorage.removeItem('vitalguard_staff');
+      window.location.href = '/app/login.html';
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      if (checkAuth()) {
+        fetchPatients();
+        initWebSocket();
+      }
     });
 
     // WebSocket — listen for any alert and refresh if patient-specific
@@ -189,11 +225,14 @@
     }
 
     async function fetchPatients() {
+      const token = checkAuth();
       const grid = document.getElementById('patients-grid');
       try {
-        const res = await fetch(`${BACKEND_URL}/patients`);
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const res = await fetch(`${BACKEND_URL}/patients`, { headers });
         if (!res.ok) throw new Error('API error');
         const patients = await res.json();
+
 
         document.getElementById('patient-count').textContent = `${patients.length} patients`;
         document.getElementById('loading-placeholder')?.remove();

@@ -367,64 +367,84 @@
 
     // Handle Incoming Web Socket Alerts
     function handleIncomingAlert(alert) {
-      // Add timestamp
       alert.id = 'alert_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
       alert.time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       alerts.push(alert);
 
       // Hide placeholder
-      document.getElementById('no-alerts-placeholder').style.display = 'none';
+      const placeholder = document.getElementById('no-alerts-placeholder');
+      if (placeholder) placeholder.style.display = 'none';
 
       // Update badge
       document.getElementById('alert-count').textContent = `${alerts.length} Alerts`;
-      showToast(`Emergency alert received: ${alert.room} - ${alert.message}`, 'error');
+      showToast(alert.type === 'ambulance_dispatch' ? `🚑 Ambulance Dispatch Route Assigned!` : `Emergency alert: ${alert.message}`, alert.type === 'ambulance_dispatch' ? 'info' : 'error');
+
+      // If hospital bed was held, update grid metrics
+      if (alert.type === 'ambulance_dispatch') {
+        fetchHospitals();
+      }
 
       // Create DOM element
       const stream = document.getElementById('alerts-stream');
       const card = document.createElement('div');
       
+      const isDispatch = alert.type === 'ambulance_dispatch' || alert.maps_url;
+      const severity = isDispatch ? 'high' : (alert.severity || 'low');
+
       const borderColors = {
-        high: 'border-red-500/40 bg-red-950/20 text-red-100 shadow-[0_0_15px_rgba(239,68,68,0.1)]',
+        high: isDispatch ? 'border-emerald-500/50 bg-emerald-950/40 text-emerald-100 shadow-[0_0_20px_rgba(16,185,129,0.2)]' : 'border-red-500/40 bg-red-950/20 text-red-100 shadow-[0_0_15px_rgba(239,68,68,0.1)]',
         medium: 'border-amber-500/40 bg-amber-950/20 text-amber-100',
         low: 'border-slate-700 bg-slate-900/30 text-slate-200'
       };
 
       const badgeColors = {
-        high: 'bg-red-500/20 border border-red-500/40 text-red-300',
+        high: isDispatch ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300' : 'bg-red-500/20 border border-red-500/40 text-red-300',
         medium: 'bg-amber-500/20 border border-amber-500/40 text-amber-300',
         low: 'bg-slate-800 border border-slate-700 text-slate-300'
       };
 
-      const pulseStyle = alert.severity === 'high' ? 'animate-pulse' : '';
+      const pulseStyle = 'animate-pulse';
 
-      card.className = `alert-card-new p-4 rounded-xl border flex flex-col gap-2 relative glass-panel ${borderColors[alert.severity] || borderColors.low}`;
+      card.className = `alert-card-new p-4 rounded-xl border flex flex-col gap-2 relative glass-panel ${borderColors[severity] || borderColors.low}`;
       card.id = alert.id;
       
+      let mapsBtnHtml = '';
+      if (alert.maps_url) {
+        mapsBtnHtml = `
+          <div class="mt-2 pt-2 border-t border-white/10 flex flex-col gap-1.5">
+            <div class="text-[10px] text-slate-300 font-medium">📍 Destination: <span class="font-bold text-white">${alert.hospital_name || 'Assigned Hospital'}</span> (${alert.hospital_address || ''})</div>
+            <a href="${alert.maps_url}" target="_blank" class="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs px-3 py-2 rounded-lg shadow-lg transition transform hover:-translate-y-0.5">
+              <i class="fa-solid fa-diamond-turn-right text-xs"></i> Get Directions (Google Maps)
+            </a>
+          </div>
+        `;
+      }
+
       card.innerHTML = `
         <div class="flex items-start justify-between gap-3">
           <div class="flex items-center gap-2">
             <span class="flex h-2 w-2 ${pulseStyle}">
-              <span class="absolute inline-flex h-2 w-2 rounded-full ${alert.severity === 'high' ? 'bg-red-400' : alert.severity === 'medium' ? 'bg-amber-400' : 'bg-slate-400'}"></span>
+              <span class="absolute inline-flex h-2 w-2 rounded-full ${isDispatch ? 'bg-emerald-400' : alert.severity === 'high' ? 'bg-red-400' : 'bg-amber-400'}"></span>
             </span>
-            <span class="text-xs font-bold uppercase tracking-wider font-display">${alert.room}</span>
+            <span class="text-xs font-bold uppercase tracking-wider font-display">${isDispatch ? '🚑 AMBULANCE DISPATCH' : (alert.room || 'SYSTEM')}</span>
           </div>
-          <span class="text-[10px] px-2 py-0.5 rounded-full uppercase font-bold tracking-wider ${badgeColors[alert.severity] || badgeColors.low}">
-            ${alert.severity}
+          <span class="text-[10px] px-2 py-0.5 rounded-full uppercase font-bold tracking-wider ${badgeColors[severity] || badgeColors.low}">
+            ${isDispatch ? 'ROUTE READY' : alert.severity}
           </span>
         </div>
         <p class="text-xs text-slate-300">${alert.message}</p>
+        ${mapsBtnHtml}
         <div class="flex items-center justify-between text-[10px] text-slate-400 mt-1">
           <span class="font-mono"><i class="fa-regular fa-clock mr-1"></i> ${alert.time}</span>
-          <!-- Acknowledge Button visible to Doctors/Nurses -->
-          <button onclick="acknowledgeAlert('${alert.id}')" class="doctor-only nurse-only bg-white/5 hover:bg-white/10 hover:text-white border border-white/10 rounded px-2 py-0.5 font-medium transition flex items-center gap-1">
+          <button onclick="acknowledgeAlert('${alert.id}')" class="bg-white/5 hover:bg-white/10 hover:text-white border border-white/10 rounded px-2 py-0.5 font-medium transition flex items-center gap-1">
             <i class="fa-solid fa-check text-[8px]"></i> Dismiss
           </button>
         </div>
       `;
       
-      // Prepend to stream
       stream.insertBefore(card, stream.firstChild);
     }
+
 
     // Dismiss alert
     function acknowledgeAlert(alertId) {
