@@ -14,11 +14,11 @@
       "last_updated": "2026-08-29T04:00:26.509128+00:00"
     },
     "iv_status": {
-      "fill_percent": 15.0,
-      "last_updated": "2026-08-29T04:00:26.608965+00:00",
+      "fill_percent": 0.0,
+      "last_updated": "2026-08-29T09:52:04.953025+00:00",
       "flow_rate_ml_hr": 125.0,
-      "vol_remaining_ml": 150.0,
-      "time_remaining_mins": 72,
+      "vol_remaining_ml": 0.0,
+      "time_remaining_mins": 0,
       "drip_rate_gtt_min": 41
     },
     "medications": [
@@ -71,11 +71,11 @@
       "last_updated": "2026-08-27T11:30:00Z"
     },
     "iv_status": {
-      "fill_percent": 100.0,
-      "last_updated": "2026-08-28T07:14:15.937681+00:00",
+      "fill_percent": 0.0,
+      "last_updated": "2026-08-29T10:03:30.677890+00:00",
       "flow_rate_ml_hr": 125.0,
-      "vol_remaining_ml": 1000.0,
-      "time_remaining_mins": 480,
+      "vol_remaining_ml": 0.0,
+      "time_remaining_mins": 0,
       "drip_rate_gtt_min": 41
     },
     "medications": [

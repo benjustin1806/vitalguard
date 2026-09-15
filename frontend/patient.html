@@ -349,6 +349,13 @@
     // Boot
     // -------------------------------------------------------------------------
     window.addEventListener('DOMContentLoaded', () => {
+      // Auth guard — redirect to login if no valid session token exists
+      const token = localStorage.getItem('vitalguard_token');
+      if (!token) {
+        window.location.href = '/app/login.html';
+        return;
+      }
+
       if (!PATIENT_ID) {
         showError('No patient ID specified. Please go back to the patient list.');
         return;
